@@ -9,8 +9,9 @@ from langchain_core.vectorstores import VectorStore
 from langchain_core.embeddings import Embeddings
 from langchain_openai import OpenAIEmbeddings
 import logging
+from logger_config import setup_logger
 
-logger = logging.getLogger(__name__)
+logger = setup_logger("retriever")
 
 
 class RetrieverAgent:
@@ -46,12 +47,31 @@ class RetrieverAgent:
             self._init_fallback_store()
     
     def _init_fallback_store(self):
-        """Initialize a simple in-memory vector store for testing"""
+        """Initialize vector store - tries to load pdf_knowledge_base, falls back to sample docs"""
         try:
             from langchain_community.vectorstores import FAISS
             from langchain_core.documents import Document
+            import os
             
-            # Create some sample documents
+            # First, try to load the pdf_knowledge_base index
+            index_path = os.path.join("./vector_store", "pdf_knowledge_base")
+            
+            if os.path.exists(index_path):
+                try:
+                    logger.info(f"Loading pdf_knowledge_base index from {index_path}...")
+                    self.vector_store = FAISS.load_local(
+                        index_path,
+                        self.embeddings,
+                        allow_dangerous_deserialization=True
+                    )
+                    logger.info("✅ Successfully loaded pdf_knowledge_base index")
+                    return
+                except Exception as e:
+                    logger.warning(f"Failed to load pdf_knowledge_base: {e}. Using fallback sample documents.")
+            else:
+                logger.warning(f"pdf_knowledge_base not found at {index_path}. Using fallback sample documents.")
+            
+            # Fallback: Create some sample documents
             sample_docs = [
                 Document(
                     page_content="LangChain is a framework for developing applications powered by language models.",

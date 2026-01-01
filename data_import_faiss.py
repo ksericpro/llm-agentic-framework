@@ -3,21 +3,25 @@ FAISS Vector Database Import Script
 Imports documents from various sources into FAISS vector store
 """
 
+from dotenv import load_dotenv
 from langchain_community.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings
 from langchain_core.documents import Document
 from langchain_community.document_loaders import (
     TextLoader,
-    PDFLoader,
+    PyPDFLoader,
     DirectoryLoader,
     CSVLoader,
     UnstructuredMarkdownLoader,
 )
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from typing import List
 import os
 from pathlib import Path
 import logging
+
+# Load environment variables from .env file
+load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -115,7 +119,7 @@ class FAISSDataImporter:
         documents = []
         for pdf_path in pdf_paths:
             try:
-                loader = PDFLoader(pdf_path)
+                loader = PyPDFLoader(pdf_path)
                 docs = loader.load()
                 documents.extend(docs)
                 logger.info(f"✅ Loaded: {pdf_path}")

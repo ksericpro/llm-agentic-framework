@@ -1,6 +1,11 @@
-from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
+#from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables import RunnablePassthrough
 from typing import Dict, List
+import logging
+from logger_config import setup_logger
+
+logger = setup_logger("generator")
 
 class GeneratorAgent:
     """
@@ -75,6 +80,7 @@ class GeneratorAgent:
         }
         
         # Generate the answer
+        logger.info(f"Generating answer for: {question[:50]}...")
         response = self.chain.invoke(inputs)
         
         # Extract citations

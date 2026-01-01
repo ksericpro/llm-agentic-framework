@@ -115,7 +115,7 @@ def _init_fallback_store(self):
 | Format | Extension | Loader | Notes |
 |--------|-----------|--------|-------|
 | Text | `.txt` | TextLoader | UTF-8 encoding |
-| PDF | `.pdf` | PDFLoader | Requires pypdf |
+| PDF | `.pdf` | PyPDFLoader | Requires pypdf |
 | CSV | `.csv` | CSVLoader | Specify source column |
 | Markdown | `.md` | UnstructuredMarkdownLoader | Preserves structure |
 | Directory | N/A | DirectoryLoader | Batch import |

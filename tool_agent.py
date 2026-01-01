@@ -6,14 +6,16 @@ Supports: Web search, calculators, API calls, custom tools
 from typing import List, Dict, Any, Optional, Callable
 from langchain_core.tools import Tool, BaseTool
 from langchain_community.tools.tavily_search import TavilySearchResults
-from langchain.agents import AgentExecutor, create_openai_tools_agent
+from langgraph.prebuilt import create_react_agent
+from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from pydantic import BaseModel, Field
 import logging
+from logger_config import setup_logger
 import math
 import requests
 
-logger = logging.getLogger(__name__)
+logger = setup_logger("tool_agent")
 
 
 # ============================================================================
@@ -181,35 +183,29 @@ class ToolAgent:
         
         logger.info(f"Initialized {len(self.tools)} tools: {[t.name for t in self.tools]}")
     
-    def _create_agent_executor(self) -> AgentExecutor:
+    def _create_agent_executor(self):
         """Create an agent executor for autonomous tool usage"""
         
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", """You are a helpful assistant with access to various tools.
-            Use tools when necessary to answer questions accurately.
-            
-            Available tools:
-            - calculator: For mathematical calculations
-            - web_scraper: To fetch content from URLs
-            - api_caller: To make HTTP API calls
-            - tavily_search_results_json: To search the web for current information
-            
-            Think step by step and use the most appropriate tool for each task.
-            """),
-            MessagesPlaceholder(variable_name="chat_history", optional=True),
-            ("human", "{input}"),
-            MessagesPlaceholder(variable_name="agent_scratchpad")
-        ])
+        system_prompt = """You are a helpful assistant with access to various tools.
+        Use tools when necessary to answer questions accurately.
         
-        agent = create_openai_tools_agent(self.llm, self.tools, prompt)
+        Available tools:
+        - calculator: For mathematical calculations
+        - web_scraper: To fetch content from URLs
+        - api_caller: To make HTTP API calls
+        - tavily_search_results_json: To search the web for current information
         
-        return AgentExecutor(
-            agent=agent,
-            tools=self.tools,
-            verbose=True,
-            max_iterations=5,
-            handle_parsing_errors=True
+        Think step by step and use the most appropriate tool for each task.
+        """
+        
+        # Create react agent using LangGraph
+        agent_executor = create_react_agent(
+            self.llm, 
+            self.tools,
+            state_modifier=system_prompt
         )
+        
+        return agent_executor
     
     def execute_tool(self, tool_name: str, tool_input: str) -> str:
         """
@@ -260,13 +256,34 @@ class ToolAgent:
         logger.info(f"Agent executing query: {query[:100]}...")
         
         try:
-            result = self.agent_executor.invoke({
-                "input": query,
-                "chat_history": chat_history or []
-            })
+            # Convert chat history to messages format
+            messages = []
+            if chat_history:
+                for msg in chat_history:
+                    if isinstance(msg, (HumanMessage, AIMessage)):
+                        messages.append(msg)
+                    elif isinstance(msg, dict):
+                        if msg.get("role") == "user":
+                            messages.append(HumanMessage(content=msg.get("content", "")))
+                        elif msg.get("role") == "assistant":
+                            messages.append(AIMessage(content=msg.get("content", "")))
+            
+            # Add current query
+            messages.append(HumanMessage(content=query))
+            
+            # Invoke the LangGraph agent
+            result = self.agent_executor.invoke({"messages": messages})
+            
+            # Extract the final response
+            final_message = result["messages"][-1]
+            output = final_message.content if hasattr(final_message, 'content') else str(final_message)
             
             logger.info("Agent execution complete")
-            return result
+            return {
+                "output": output,
+                "intermediate_steps": result.get("messages", []),
+                "messages": result.get("messages", [])
+            }
         
         except Exception as e:
             logger.error(f"Agent execution error: {e}")

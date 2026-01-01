@@ -1,3 +1,5 @@
+from typing import List
+
 class IntentPlanningAgent:
     def __init__(self, llm):
         self.llm = llm

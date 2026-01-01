@@ -1,6 +1,10 @@
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
 from typing import Literal
+import logging
+from logger_config import setup_logger
+
+logger = setup_logger("router")
 
 class RoutingDecision(BaseModel):
     """Structured output for the router's decision."""
@@ -45,6 +49,7 @@ class RouterAgent:
 
     def route(self, user_query: str) -> RoutingDecision:
         """Main routing method."""
+        logger.info(f"Routing query: {user_query[:100]}...")
         decision = self.chain.invoke({"query": user_query})
         
         # You can add post-processing logic here

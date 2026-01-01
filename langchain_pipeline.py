@@ -11,6 +11,7 @@ from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 import operator
 import logging
+from logger_config import setup_logger
 
 # Import your existing agents
 from router_agent import RouterAgent, RoutingDecision
@@ -21,8 +22,7 @@ from retriever_agent import RetrieverAgent
 from tool_agent import ToolAgent
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = setup_logger("pipeline")
 
 
 # ============================================================================
@@ -37,6 +37,7 @@ class AgentState(TypedDict):
     # Input
     query: str
     chat_history: Annotated[Sequence[BaseMessage], operator.add]
+    llm: ChatOpenAI  # LLM instance passed through the pipeline
     
     # Router outputs
     routing_decision: RoutingDecision | None
@@ -375,13 +376,13 @@ def run_agent_pipeline(
     stream: bool = False
 ) -> Dict[str, Any]:
     """
-    Runs the complete agent pipeline
+    Runs the complete agent pipeline (non-streaming only)
     
     Args:
         query: User's question
         llm: Language model instance
         chat_history: Previous conversation messages
-        stream: Whether to stream the response
+        stream: Whether to stream the response (deprecated, use stream_agent_pipeline instead)
     
     Returns:
         Dictionary with final_answer and metadata
@@ -408,17 +409,54 @@ def run_agent_pipeline(
         "error": None
     }
     
-    # Run the pipeline
+    # Run the pipeline (non-streaming only)
     config = {"configurable": {"thread_id": "default"}}
+    result = app.invoke(initial_state, config)
+    return result
+
+
+def stream_agent_pipeline(
+    query: str,
+    llm: ChatOpenAI,
+    chat_history: List[BaseMessage] = None
+):
+    """
+    Runs the complete agent pipeline in streaming mode (synchronous generator)
     
-    if stream:
-        # Streaming mode
-        for event in app.stream(initial_state, config):
-            yield event
-    else:
-        # Non-streaming mode
-        result = app.invoke(initial_state, config)
-        return result
+    Args:
+        query: User's question
+        llm: Language model instance
+        chat_history: Previous conversation messages
+    
+    Yields:
+        Events from the pipeline execution
+    """
+    # Create the graph
+    app = create_agent_graph(llm)
+    
+    # Initialize state
+    initial_state = {
+        "query": query,
+        "chat_history": chat_history or [],
+        "llm": llm,
+        "routing_decision": None,
+        "intent": None,
+        "plan": None,
+        "retrieved_context": [],
+        "web_search_results": [],
+        "draft_answer": None,
+        "critique": None,
+        "needs_revision": False,
+        "revision_count": 0,
+        "final_answer": None,
+        "citations": [],
+        "error": None
+    }
+    
+    # Run the pipeline in streaming mode
+    config = {"configurable": {"thread_id": "default"}}
+    for event in app.stream(initial_state, config):
+        yield event
 
 
 # ============================================================================

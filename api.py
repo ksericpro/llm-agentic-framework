@@ -4,15 +4,17 @@ Provides REST API endpoints with streaming support
 """
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, AIMessage
+from contextlib import asynccontextmanager
 import json
 import os
 from dotenv import load_dotenv
 import logging
+from logger_config import setup_logger
 
 # Import the pipeline
 from langchain_pipeline import run_agent_pipeline, stream_agent_response
@@ -21,14 +23,42 @@ from langchain_pipeline import run_agent_pipeline, stream_agent_response
 load_dotenv()
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = setup_logger("api")
+
+
+# ============================================================================
+# Lifespan Event Handler
+# ============================================================================
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Lifespan event handler for startup and shutdown events
+    """
+    # Startup
+    logger.info("🚀 LangChain Agentic Pipeline API starting up...")
+    
+    # Verify environment variables
+    if not os.getenv("OPENAI_API_KEY"):
+        logger.warning("⚠️ OPENAI_API_KEY not set!")
+    
+    if not os.getenv("TAVILY_API_KEY"):
+        logger.warning("⚠️ TAVILY_API_KEY not set (web search will fail)")
+    
+    logger.info("✅ API ready to accept requests")
+    
+    yield
+    
+    # Shutdown
+    logger.info("👋 LangChain Agentic Pipeline API shutting down...")
+
 
 # Initialize FastAPI app
 app = FastAPI(
     title="LangChain Agentic Pipeline API",
     description="Multi-agent LLM pipeline with streaming support",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 # ============================================================================
@@ -173,14 +203,15 @@ async def query_pipeline(request: QueryRequest):
         )
         
         # Extract response data
-        final_answer = result.get("final_answer", "No answer generated")
+        # Ensure final_answer is always a string, never None
+        final_answer = result.get("final_answer") or "I apologize, but I couldn't generate an answer."
         
         response = QueryResponse(
             success=True,
             query=request.query,
             final_answer=final_answer,
             intent=result.get("intent"),
-            routing_decision=str(result.get("routing_decision")),
+            routing_decision=str(result.get("routing_decision")) if result.get("routing_decision") else None,
             citations=result.get("citations"),
             error=result.get("error")
         )
@@ -269,52 +300,36 @@ async def chat_endpoint(request: QueryRequest):
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request, exc):
     """Custom HTTP exception handler"""
-    return {
-        "success": False,
-        "error": exc.detail,
-        "status_code": exc.status_code
-    }
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "success": False,
+            "error": exc.detail,
+            "status_code": exc.status_code
+        }
+    )
 
 
 @app.exception_handler(Exception)
 async def general_exception_handler(request, exc):
     """General exception handler"""
     logger.error(f"Unhandled exception: {str(exc)}", exc_info=True)
-    return {
-        "success": False,
-        "error": "Internal server error",
-        "detail": str(exc)
-    }
+    return JSONResponse(
+        status_code=500,
+        content={
+            "success": False,
+            "error": "Internal server error",
+            "detail": str(exc)
+        }
+    )
 
 
-# ============================================================================
-# Startup/Shutdown Events
-# ============================================================================
-
-@app.on_event("startup")
-async def startup_event():
-    """Run on application startup"""
-    logger.info("🚀 LangChain Agentic Pipeline API starting up...")
-    
-    # Verify environment variables
-    if not os.getenv("OPENAI_API_KEY"):
-        logger.warning("⚠️ OPENAI_API_KEY not set!")
-    
-    if not os.getenv("TAVILY_API_KEY"):
-        logger.warning("⚠️ TAVILY_API_KEY not set (web search will fail)")
-    
-    logger.info("✅ API ready to accept requests")
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Run on application shutdown"""
-    logger.info("👋 LangChain Agentic Pipeline API shutting down...")
 
 
 # ============================================================================
 # Run with: uvicorn api:app --reload --port 8000
 # ============================================================================
+
 
 if __name__ == "__main__":
     import uvicorn

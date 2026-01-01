@@ -1,3 +1,20 @@
+from pydantic import BaseModel, Field
+from typing import List
+
+class CritiqueSchema(BaseModel):
+    """Structured output for the critic's review."""
+    pass_: bool = Field(
+        alias="pass",
+        description="Whether the draft answer passes quality checks."
+    )
+    issues: List[str] = Field(
+        default_factory=list,
+        description="List of specific issues found in the draft answer."
+    )
+    reasoning: str = Field(
+        description="Detailed reasoning for the verdict."
+    )
+
 class CriticAgent:
     def __init__(self, llm):
         self.llm = llm
@@ -19,12 +36,24 @@ class CriticAgent:
         
         critique = self.llm.with_structured_output(CritiqueSchema).invoke(critique_prompt)
         
-        if not critique["pass"]:
+        if not critique.pass_:
             # Generate specific instructions for correction
             correction_plan = self._create_correction_plan(critique)
             return {
                 "needs_correction": True,
-                "issues": critique["issues"],
+                "issues": critique.issues,
                 "correction_plan": correction_plan
             }
         return {"needs_correction": False}
+    
+    def _create_correction_plan(self, critique: CritiqueSchema) -> str:
+        """Generate a correction plan based on the critique."""
+        plan_parts = ["The draft answer needs the following corrections:"]
+        
+        for i, issue in enumerate(critique.issues, 1):
+            plan_parts.append(f"{i}. {issue}")
+        
+        plan_parts.append(f"\nReasoning: {critique.reasoning}")
+        plan_parts.append("\nPlease revise the answer to address these issues.")
+        
+        return "\n".join(plan_parts)
