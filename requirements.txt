@@ -1,0 +1,40 @@
+# LangChain Agentic Pipeline Requirements (Updated for Python 3.13)
+
+# Core LangChain - Using flexible versions that support Python 3.13
+langchain>=0.1.0
+langchain-core>=0.1.16
+langchain-openai>=0.0.5
+langchain-community>=0.0.13
+langgraph>=0.0.20
+
+# API Framework
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+pydantic>=2.5.3
+python-dotenv>=1.0.0
+
+# LLM Providers
+openai>=1.10.0
+
+# Tools & Utilities
+tavily-python>=0.3.0  # For web search
+httpx>=0.26.0
+aiohttp>=3.9.1
+
+# Vector store support (for RetrieverAgent)
+faiss-cpu>=1.7.4  # Lightweight vector store
+# Alternative: chromadb>=0.4.22  # More feature-rich
+
+# Document loaders
+pypdf>=4.0.1  # PDF loading
+unstructured>=0.12.4  # Various document formats
+python-magic-bin>=0.4.14  # File type detection (Windows)
+
+# Additional tools
+beautifulsoup4>=4.12.3  # For web scraping
+lxml>=5.1.0  # HTML parsing
+
+# Development
+pytest>=7.4.4
+pytest-asyncio>=0.23.3
+black>=24.1.1

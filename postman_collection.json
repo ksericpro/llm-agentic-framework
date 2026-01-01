@@ -1,0 +1,246 @@
+{
+  "info": {
+    "name": "LangChain Agentic Pipeline API",
+    "description": "Collection for testing the LangChain Agentic Pipeline with streaming support",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8000/health",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["health"]
+        },
+        "description": "Check API health and configuration status"
+      }
+    },
+    {
+      "name": "Root Endpoint",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8000/",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": [""]
+        },
+        "description": "Basic health check"
+      }
+    },
+    {
+      "name": "Non-Streaming Query",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"query\": \"What are the latest developments in artificial intelligence?\",\n  \"stream\": false,\n  \"model\": \"gpt-4o-mini\",\n  \"temperature\": 0.7\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8000/api/query",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["api", "query"]
+        },
+        "description": "Send a non-streaming query to the pipeline"
+      }
+    },
+    {
+      "name": "Streaming Query",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Accept",
+            "value": "text/event-stream"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"query\": \"Explain quantum computing in simple terms\",\n  \"stream\": true,\n  \"model\": \"gpt-4o-mini\",\n  \"temperature\": 0.7\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8000/api/stream",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["api", "stream"]
+        },
+        "description": "Send a streaming query (Server-Sent Events)"
+      }
+    },
+    {
+      "name": "Query with Chat History",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"query\": \"Can you give me an example?\",\n  \"chat_history\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"What is machine learning?\"\n    },\n    {\n      \"role\": \"assistant\",\n      \"content\": \"Machine learning is a subset of artificial intelligence that enables systems to learn and improve from experience without being explicitly programmed.\"\n    }\n  ],\n  \"stream\": false,\n  \"model\": \"gpt-4o-mini\",\n  \"temperature\": 0.7\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8000/api/query",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["api", "query"]
+        },
+        "description": "Query with conversation context"
+      }
+    },
+    {
+      "name": "Web Search Query",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"query\": \"What happened in the tech industry this week?\",\n  \"stream\": false,\n  \"model\": \"gpt-4o-mini\",\n  \"temperature\": 0.7\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8000/api/query",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["api", "query"]
+        },
+        "description": "Query that triggers web search"
+      }
+    },
+    {
+      "name": "GPT-4 Query (Higher Quality)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"query\": \"Write a detailed analysis of transformer architecture in neural networks\",\n  \"stream\": false,\n  \"model\": \"gpt-4o\",\n  \"temperature\": 0.5\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8000/api/query",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["api", "query"]
+        },
+        "description": "Use GPT-4 for higher quality responses"
+      }
+    },
+    {
+      "name": "Creative Query (High Temperature)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"query\": \"Write a creative story about AI in the year 2050\",\n  \"stream\": false,\n  \"model\": \"gpt-4o-mini\",\n  \"temperature\": 1.2\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8000/api/query",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["api", "query"]
+        },
+        "description": "High temperature for creative responses"
+      }
+    },
+    {
+      "name": "Unified Chat Endpoint (Non-Streaming)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"query\": \"What is deep learning?\",\n  \"stream\": false\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8000/api/chat",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["api", "chat"]
+        },
+        "description": "Unified endpoint that routes based on stream flag"
+      }
+    },
+    {
+      "name": "Unified Chat Endpoint (Streaming)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Accept",
+            "value": "text/event-stream"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"query\": \"What is deep learning?\",\n  \"stream\": true\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8000/api/chat",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["api", "chat"]
+        },
+        "description": "Unified endpoint with streaming enabled"
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000",
+      "type": "string"
+    }
+  ]
+}
