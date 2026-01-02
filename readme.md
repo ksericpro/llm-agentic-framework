@@ -5,10 +5,10 @@ A production-ready multi-agent LLM pipeline built with **LangChain**, **LangGrap
 ## 🌟 Features
 
 - **Multi-Agent Architecture**: Router, Intent Planning, Retrieval, Translator, Generator, and Critic agents.
-- **Advanced Web Crawling (NEW)**: Integration with **Crawl4AI** for JavaScript rendering and clean Markdown extraction.
-- **Multilingual Support (NEW)**: Built-in **Translation Agent** for universal output in Chinese, Spanish, French, German, and Japanese.
-- **Hierarchical Memory (NEW)**: Scalable conversation history using multi-level summarization for 100+ message sessions.
-- **Observability (NEW)**: Full tracing and monitoring integrated with **Langfuse**.
+- **Advanced Web Crawling**: Integration with **Crawl4AI** for JavaScript rendering and clean Markdown extraction.
+- **Multilingual Support**: Built-in **Translation Agent** for universal output in Chinese, Spanish, French, German, and Japanese.
+- **Hierarchical Memory**: Scalable conversation history using multi-level summarization for 100+ message sessions.
+- **Observability**: Full tracing and monitoring integrated with **Langfuse**.
 - **Real-time Streaming**: Progressive responses via Server-Sent Events (SSE).
 - **Persistent Feedback**: Built-in thumbs up/down system with MongoDB storage and analytics.
 - **Smart UI**: Modern Streamlit dashboard with sticky headers, session history (24h filter), and tool-usage badges.
@@ -285,7 +285,7 @@ llm-agentic/
 - **Purpose**: Analyzes user intent and creates execution plan
 - **Output**: Intent classification and step-by-step plan
 
-### 3. Retriever Agent (NEW)
+### 3. Retriever Agent
 - **Purpose**: Handles vector store and document retrieval
 - **Features**: 
   - Multiple search strategies (similarity, MMR, reranking)
@@ -303,12 +303,12 @@ llm-agentic/
   - API caller (standard HTTP requests)
 - **Output**: Tool execution results formatted for LLMs.
 
-### 5. Memory Management (NEW)
+### 5. Memory Management
 - **Hierarchical Summarization**: Prevents context loss in extremely long conversations by summarizing previous summaries.
 - **Context Clearing**: Supports `/forget` command to reset memory while maintaining session persistence.
 - **Visual Warnings**: UI alerts when conversation length may impact performance.
 
-### 6. Translation Agent (NEW)
+### 6. Translation Agent
 - **Purpose**: Specialized linguistic agent for high-quality translation.
 - **Features**: 
   - Preserves Markdown formatting.
@@ -431,13 +431,10 @@ For issues or questions:
 
 **Built with ❤️ using LangChain, LangGraph, and FastAPI**
 
-# how to run
+# HOW to run
 
 # server
-uv run api.py
+cd orchestrator && uv run api.py
 
 # ui
 cd ui/streamlit-ui && uv run streamlit run app.py
-
-# test
-uv run python orchestrator/final_guitar_test.py
