@@ -15,41 +15,7 @@ A production-ready multi-agent LLM pipeline built with **LangChain**, **LangGrap
 
 ## 📋 Architecture
 
-```
-User Query
-    ↓
-┌─────────────────────────────────────────────────────────┐
-│                    Router Agent                         │
-│  (Decides: web_search, targeted_crawl, internal, calc)  │
-└─────────────────────────────────────────────────────────┘
-    ↓
-┌─────────────────────────────────────────────────────────┐
-│              Intent & Planning Agent                     │
-│         (Analyzes intent, creates plan)                  │
-└─────────────────────────────────────────────────────────┘
-    ↓
-┌─────────────────────────────────────────────────────────┐
-│                 Retrieval Node                           │
-│  (Fetches data: web search, crawl, vector store)        │
-└─────────────────────────────────────────────────────────┘
-    ↓
-    ├─ Tool: translate? ──────────┐
-    ↓                             ↓
-┌─────────────────────┐    ┌─────────────────────┐
-│   Generator Agent   │    │  Translation Agent  │
-│ (Synthesis + RAG)   │    │ (Direct Translation)│
-└─────────────────────┘    └─────────────────────┘
-    ↓                             ↓
-┌─────────────────────┐           │
-│    Critic Agent     │           │
-│ (Quality Assurance) │           │
-└─────────────────────┘           │
-    ↓                             ↓
-    ├─ Needs Revision? ───────────┤
-    └─ Approved ──────────────────┤
-                                  ↓
-                             Final Answer
-```
+![Architecture Diagram](main_pipeline.png)
 
 ## 🚀 Quick Start
 
@@ -285,20 +251,26 @@ eventSource.onmessage = (event) => {
 ## 🏗️ Project Structure
 
 ```
-llm-framework/
-├── api.py                      # FastAPI application
-├── langchain_pipeline.py       # LangGraph pipeline implementation
-├── router_agent.py             # Router agent
-├── intentplanning_agent.py     # Intent & planning agent
-├── translation_agent.py        # Translation agent (NEW)
-├── generator_agent.py          # Answer generator agent
-├── critic_agent.py             # Quality assurance agent
-├── retriever_agent.py          # Vector store retrieval agent
-├── tool_agent.py               # Tool execution agent
-├── crawler_agent.py            # Advanced Crawl4AI implementation
-├── example_client.py           # Example client code
-├── requirements.txt            # Python dependencies
-├── .env.example                # Environment variables template
+llm-agentic/
+├── docs/                       # Project documentation
+├── orchestrator/               # Backend & Core Agents
+│   ├── api.py                  # FastAPI application
+│   ├── langchain_pipeline.py   # LangGraph pipeline implementation
+│   ├── router_agent.py         # Router agent
+│   ├── intentplanning_agent.py # Intent & planning agent
+│   ├── translation_agent.py    # Translation agent
+│   ├── generator_agent.py      # Answer generator agent
+│   ├── critic_agent.py         # Quality assurance agent
+│   ├── retriever_agent.py      # Vector store retrieval agent
+│   ├── tool_agent.py           # Tool execution agent
+│   ├── crawler_agent.py        # Advanced Crawl4AI implementation
+│   ├── example_client.py       # Example client code
+│   ├── requirements.txt        # Python dependencies
+│   └── .env.example            # Environment variables template
+├── postman/                    # API Testing Collections
+├── ui/                         # Frontend Applications
+│   └── streamlit-ui/           # Streamlit dashboard
+├── main_pipeline.png           # Architecture diagram source
 └── README.md                   # This file
 ```
 
