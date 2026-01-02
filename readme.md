@@ -23,7 +23,7 @@ A production-ready multi-agent LLM pipeline built with **LangChain**, **LangGrap
 
 ```bash
 # Clone or navigate to the project
-cd c:\Projects\llm-framework
+cd c:\Projects\llm-framework\orchestrator
 
 # Install dependencies using uv (recommended for speed)
 uv pip install -r requirements.txt
@@ -45,17 +45,22 @@ Edit `.env` and add your API keys:
 ```env
 OPENAI_API_KEY=sk-your-openai-key-here
 TAVILY_API_KEY=tvly-your-tavily-key-here
+MONGO_URL=your-mongo-url-here
+LANGFUSE_PUBLIC_KEY=your-public-key
+LANGFUSE_SECRET_KEY=your-secret-key
 ```
 
 **Get API Keys:**
 - OpenAI: https://platform.openai.com/api-keys
 - Tavily (for web search): https://tavily.com
+- MongoDB: https://www.mongodb.com
+- Langfuse: https://langfuse.com
 
 ### 3. Run the API
 
 ```bash
 # Option 1: Direct Python
-python api.py
+uv run api.py
 
 # Option 2: Using uvicorn (recommended for production)
 uvicorn api:app --reload --port 8000
@@ -70,8 +75,11 @@ The API will be available at: `http://localhost:8000`
 
 ```bash
 # Run the example client
-python example_client.py
-```
+uv run example_client.py
+'''
+
+# Test health endpoint
+curl http://localhost:8000/health
 
 ## 📡 API Endpoints
 
@@ -352,24 +360,6 @@ Real-time updates for each pipeline stage:
 - Answer generation
 - Quality review
 - Final completion
-
-## 🧪 Testing
-
-```bash
-# Run example client
-python example_client.py
-
-# Test health endpoint
-curl http://localhost:8000/health
-
-# Test with specific query
-python -c "
-from example_client import AgenticPipelineClient
-client = AgenticPipelineClient()
-result = client.query('What is LangChain?')
-print(result['final_answer'])
-"
-```
 
 ## 🚨 Error Handling
 
