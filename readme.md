@@ -421,5 +421,11 @@ For issues or questions:
 
 **Built with ❤️ using LangChain, LangGraph, and FastAPI**
 
-# 5. Run UI
+# 5. Import PDF to RAG [Optional]
+
+For now it is using META FAISS database.
+place your pdf file inside pdf folder
+uv run import_pdf_folder.py
+
+# 6. Run UI
 cd ui/streamlit-ui && uv run streamlit run app.py
