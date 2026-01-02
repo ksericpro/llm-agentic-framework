@@ -8,6 +8,7 @@ from langchain_core.documents import Document
 from langchain_core.vectorstores import VectorStore
 from langchain_core.embeddings import Embeddings
 from langchain_openai import OpenAIEmbeddings
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 import logging
 from logger_config import setup_logger
 
@@ -93,6 +94,42 @@ class RetrieverAgent:
         except Exception as e:
             logger.error(f"Failed to initialize fallback vector store: {e}")
             self.vector_store = None
+
+    def refine_query(self, query: str, chat_history: list = None, summary: str = "") -> str:
+        """
+        Refine the user query based on chat history and summary for better retrieval.
+        """
+        if not self.llm:
+            return query
+            
+        logger.info(f"Refining query: {query[:50]}...")
+        
+        refine_prompt = ChatPromptTemplate.from_messages([
+            ("system", """You are a Query Refinement Agent. 
+            Your task is to rewrite the user's latest query to be self-contained and optimized for vector search retrieval.
+            Use the conversation history and summary to resolve any pronouns (it, they, that) or ambiguous references.
+            
+            **Conversation Summary:**
+            {summary}
+            
+            **Rules:**
+            1. If the query is already self-contained, return it as is.
+            2. Do NOT answer the query, only rewrite it.
+            3. Keep the intent identical but make it explicit.
+            """),
+            MessagesPlaceholder(variable_name="chat_history"),
+            ("human", "{query}")
+        ])
+        
+        chain = refine_prompt | self.llm
+        refined = chain.invoke({
+            "query": query, 
+            "chat_history": chat_history or [],
+            "summary": summary or "No previous summary available."
+        })
+        
+        logger.info(f"Refined query: {refined.content[:100]}...")
+        return refined.content
     
     def retrieve(
         self,

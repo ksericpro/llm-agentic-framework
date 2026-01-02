@@ -1,4 +1,4 @@
-from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from pydantic import BaseModel, Field
 from typing import Literal
 import logging
@@ -25,6 +25,12 @@ class RouterAgent:
         self.router_prompt = ChatPromptTemplate.from_messages([
             ("system", """You are a Router Agent. Analyze the user's query and decide the best tool to use.
             
+            **Context Awareness:**
+            Consider the conversation history and summary to understand the user's intent.
+            
+            **Conversation Summary:**
+            {summary}
+            
             **Decision Rules:**
             1. Use `web_search` for:
                - Questions about current events, news, or recent developments.
@@ -42,15 +48,20 @@ class RouterAgent:
                - Mathematical calculations, conversions, or formula-based problems.
             
             Return your decision as structured JSON."""),
+            MessagesPlaceholder(variable_name="chat_history"),
             ("human", "User Query: {query}")
         ])
         # Create a chain that outputs the structured RoutingDecision
         self.chain = self.router_prompt | self.llm.with_structured_output(RoutingDecision)
 
-    def route(self, user_query: str) -> RoutingDecision:
+    def route(self, user_query: str, chat_history: list = None, summary: str = "") -> RoutingDecision:
         """Main routing method."""
         logger.info(f"Routing query: {user_query[:100]}...")
-        decision = self.chain.invoke({"query": user_query})
+        decision = self.chain.invoke({
+            "query": user_query,
+            "chat_history": chat_history or [],
+            "summary": summary or "No previous summary available."
+        })
         
         # You can add post-processing logic here
         # For example, validate URLs for crawl decisions

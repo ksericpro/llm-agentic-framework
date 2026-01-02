@@ -438,3 +438,11 @@ For issues or questions:
 ---
 
 **Built with ❤️ using LangChain, LangGraph, and FastAPI**
+
+# how to run
+
+# server
+uv run api.py
+
+# ui
+uv run streamlit run ui/app.py

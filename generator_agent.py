@@ -1,4 +1,3 @@
-#from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables import RunnablePassthrough
 from typing import Dict, List
@@ -22,9 +21,10 @@ class GeneratorAgent:
            - The user's original question
            - A plan or instructions from the supervisor
            - Retrieved data (documents, web snippets, tool outputs)
+           - A summary of the previous conversation
         
         2. You MUST:
-           - Base your answer STRICTLY on the provided context.
+           - Base your answer STRICTLY on the provided context and summary.
            - Cite specific sources using [Doc #] notation.
            - If the context is insufficient, say so. DO NOT invent facts.
            - Match the tone and detail level requested in the plan.
@@ -35,6 +35,7 @@ class GeneratorAgent:
         # Create a robust prompt template
         self.prompt_template = ChatPromptTemplate.from_messages([
             ("system", self.system_prompt),
+            ("system", "Conversation Summary: {summary}"),
             MessagesPlaceholder(variable_name="chat_history"),
             ("human", """
             Original User Question: {question}
@@ -55,7 +56,7 @@ class GeneratorAgent:
             | self.llm
         )
     
-    def generate(self, *, question: str, instructions: str, context: List[str], chat_history: List = None) -> Dict:
+    def generate(self, *, question: str, instructions: str, context: List[str], chat_history: List = None, summary: str = "") -> Dict:
         """
         Main generation method. Expects structured inputs.
         
@@ -64,6 +65,7 @@ class GeneratorAgent:
             instructions: Plan from Orchestrator/Intent agent
             context: List of context strings from retrievers/tools
             chat_history: Previous conversation (optional)
+            summary: Conversation summary (optional)
             
         Returns:
             Dictionary containing the answer and metadata
@@ -76,7 +78,8 @@ class GeneratorAgent:
             "question": question,
             "instructions": instructions,
             "context": formatted_context,
-            "chat_history": chat_history or []
+            "chat_history": chat_history or [],
+            "summary": summary or "No previous summary available."
         }
         
         # Generate the answer
@@ -147,21 +150,3 @@ class GeneratorAgent:
         kwargs["instructions"] = f"{instructions}\n\nOutput Format: {format_instructions.get(format_spec, '')}"
         
         return self.generate(**kwargs)
-
-    def generate_with_confidence(self, **kwargs):
-        """Generate answer with a confidence score based on source quality."""
-        result = self.generate(**kwargs)
-        
-        # Analyze how well sources support the answer
-        support_score = self._calculate_support_score(
-            result["answer"],
-            kwargs["context"]
-        )
-        
-        # Check for hedging language
-        certainty_score = self._analyze_certainty_language(result["answer"])
-        
-        result["confidence"] = (support_score + certainty_score) / 2
-        result["confidence_reason"] = f"Based on source support ({support_score}/2) and certainty ({certainty_score}/2)"
-        
-        return result

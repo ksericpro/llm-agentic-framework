@@ -3,6 +3,14 @@ FastAPI Application for LangChain Agentic Pipeline
 Provides REST API endpoints with streaming support
 """
 
+import os
+from dotenv import load_dotenv
+
+# Load environment variables as early as possible
+# This ensures that module-level initializations in imported files (like Langfuse)
+# have access to the environment variables.
+load_dotenv()
+
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel, Field
@@ -11,16 +19,16 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, AIMessage
 from contextlib import asynccontextmanager
 import json
-import os
-from dotenv import load_dotenv
 import logging
 from logger_config import setup_logger
 
 # Import the pipeline
-from langchain_pipeline import run_agent_pipeline, stream_agent_response
-
-# Load environment variables
-load_dotenv()
+from langchain_pipeline import (
+    run_agent_pipeline, 
+    stream_agent_response, 
+    get_all_sessions, 
+    get_session_state
+)
 
 # Configure logging
 logger = setup_logger("api")
@@ -44,6 +52,11 @@ async def lifespan(app: FastAPI):
     
     if not os.getenv("TAVILY_API_KEY"):
         logger.warning("⚠️ TAVILY_API_KEY not set (web search will fail)")
+    
+    if not os.getenv("LANGFUSE_PUBLIC_KEY") or not os.getenv("LANGFUSE_SECRET_KEY"):
+        logger.warning("⚠️ Langfuse keys not set (observability will be disabled)")
+    else:
+        logger.info("📊 Langfuse observability enabled")
     
     logger.info("✅ API ready to accept requests")
     
@@ -77,6 +90,10 @@ class QueryRequest(BaseModel):
     chat_history: Optional[List[ChatMessage]] = Field(
         default=None,
         description="Previous conversation history"
+    )
+    session_id: Optional[str] = Field(
+        default="default",
+        description="Unique session ID for chat history persistence"
     )
     stream: Optional[bool] = Field(
         default=False,
@@ -199,6 +216,7 @@ async def query_pipeline(request: QueryRequest):
             query=request.query,
             llm=llm,
             chat_history=chat_history,
+            thread_id=request.session_id,
             stream=False
         )
         
@@ -247,7 +265,7 @@ async def stream_query(request: QueryRequest):
                 yield f"data: {json.dumps({'event': 'start', 'query': request.query})}\n\n"
                 
                 # Stream pipeline events
-                async for event in stream_agent_response(request.query, llm):
+                async for event in stream_agent_response(request.query, llm, thread_id=request.session_id):
                     event_data = json.dumps(event)
                     yield f"data: {event_data}\n\n"
                 
@@ -293,6 +311,42 @@ async def chat_endpoint(request: QueryRequest):
         return await query_pipeline(request)
 
 
+@app.get("/api/sessions")
+async def list_sessions():
+    """List all chat sessions from MongoDB"""
+    try:
+        sessions = get_all_sessions()
+        return {"success": True, "sessions": sessions}
+    except Exception as e:
+        logger.error(f"Failed to list sessions: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@app.get("/api/sessions/{session_id}")
+async def get_session(session_id: str):
+    """Get the state and history for a specific session"""
+    try:
+        state = get_session_state(session_id)
+        if not state:
+            return {"success": False, "error": "Session not found"}
+        
+        # Format history for the UI
+        history = []
+        for msg in state.get("chat_history", []):
+            role = "user" if isinstance(msg, HumanMessage) else "assistant"
+            history.append({"role": role, "content": msg.content})
+            
+        return {
+            "success": True, 
+            "session_id": session_id,
+            "summary": state.get("summary", ""),
+            "history": history
+        }
+    except Exception as e:
+        logger.error(f"Failed to get session {session_id}: {e}")
+        return {"success": False, "error": str(e)}
+
+
 # ============================================================================
 # Error Handlers
 # ============================================================================
@@ -322,8 +376,6 @@ async def general_exception_handler(request, exc):
             "detail": str(exc)
         }
     )
-
-
 
 
 # ============================================================================

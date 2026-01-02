@@ -1,6 +1,6 @@
 """
 LangChain Agentic Pipeline with LangGraph
-Implements a complete agentic workflow with streaming support and persistent memory.
+Implements a complete agentic workflow with streaming support
 """
 
 import os
@@ -12,8 +12,6 @@ load_dotenv()
 from typing import TypedDict, Annotated, Sequence, List, Dict, Any
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
-from langgraph.checkpoint.mongodb import MongoDBSaver
-from pymongo import MongoClient
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
@@ -33,111 +31,14 @@ from tool_agent import ToolAgent
 # Configure logging
 logger = setup_logger("pipeline")
 
-# Initialize Langfuse Observability
+# Initialize Langfuse Callback Handler
+# It will automatically pick up credentials from environment variables
 try:
-    if os.getenv("LANGFUSE_PUBLIC_KEY") and os.getenv("LANGFUSE_SECRET_KEY"):
-        LANGFUSE_ENABLED = True
-        logger.info("📊 Langfuse observability enabled")
-    else:
-        LANGFUSE_ENABLED = False
-        logger.warning("⚠️ Langfuse keys not set (observability disabled)")
+    langfuse_handler = CallbackHandler()
+    logger.info("✅ Langfuse callback handler initialized")
 except Exception as e:
-    LANGFUSE_ENABLED = False
-    logger.warning(f"⚠️ Langfuse check failed: {str(e)}")
-
-# Initialize MongoDB Checkpointer
-mongodb_client = None
-mongodb_saver = None
-
-def get_checkpointer():
-    """
-    Initializes and returns the MongoDB checkpointer if MONGO_URL is available.
-    Falls back to MemorySaver otherwise.
-    """
-    global mongodb_client, mongodb_saver
-    
-    if mongodb_saver:
-        return mongodb_saver
-        
-    mongo_url = os.getenv("MONGO_URL")
-    if mongo_url:
-        try:
-            logger.info("🔌 Connecting to MongoDB for checkpointing...")
-            mongodb_client = MongoClient(mongo_url)
-            mongodb_client.admin.command('ping')
-            # Explicitly use 'checkpointing_db' which is the default for this version
-            mongodb_saver = MongoDBSaver(mongodb_client, db_name="checkpointing_db")
-            logger.info("✅ MongoDB checkpointer initialized")
-            return mongodb_saver
-        except Exception as e:
-            logger.error(f"❌ Failed to initialize MongoDB checkpointer: {e}")
-            
-    logger.warning("⚠️ Using in-memory checkpointer (MemorySaver)")
-    return MemorySaver()
-
-
-def get_all_sessions() -> List[Dict[str, Any]]:
-    """
-    Fetches all unique session IDs and their latest summaries from MongoDB.
-    """
-    mongo_url = os.getenv("MONGO_URL")
-    if not mongo_url:
-        return []
-        
-    try:
-        client = MongoClient(mongo_url)
-        db = client["checkpointing_db"]
-        collection = db["checkpoints"]
-        
-        # Get unique thread_ids
-        thread_ids = collection.distinct("thread_id")
-        
-        checkpointer = get_checkpointer()
-        sessions = []
-        
-        # Fetch latest state for each thread
-        for tid in thread_ids:
-            try:
-                config = {"configurable": {"thread_id": tid}}
-                state = checkpointer.get(config)
-                if state:
-                    values = state.get("checkpoint", {}).get("channel_values", {})
-                    summary = values.get("summary", "No summary available")
-                    ts = state.get("checkpoint", {}).get("ts", "")
-                    
-                    sessions.append({
-                        "session_id": tid,
-                        "summary": summary,
-                        "last_updated": ts
-                    })
-            except Exception as e:
-                logger.warning(f"Could not parse session {tid}: {e}")
-                
-        # Sort by last_updated descending
-        sessions.sort(key=lambda x: x.get("last_updated", ""), reverse=True)
-        return sessions
-    except Exception as e:
-        logger.error(f"❌ Failed to fetch sessions: {e}")
-        return []
-
-
-def get_session_state(thread_id: str) -> Dict[str, Any]:
-    """
-    Fetches the latest state for a specific session.
-    """
-    checkpointer = get_checkpointer()
-    if isinstance(checkpointer, MemorySaver):
-        return {}
-        
-    try:
-        config = {"configurable": {"thread_id": thread_id}}
-        state = checkpointer.get(config)
-        if state:
-            return state.get("checkpoint", {}).get("channel_values", {})
-        return {}
-    except Exception as e:
-        logger.error(f"❌ Failed to fetch session state: {e}")
-        return {}
+    logger.warning(f"⚠️ Langfuse initialization skipped: {str(e)}")
+    langfuse_handler = None
 
 
 # ============================================================================
@@ -147,11 +48,12 @@ def get_session_state(thread_id: str) -> Dict[str, Any]:
 class AgentState(TypedDict):
     """
     The state object that flows through the entire pipeline.
+    Each agent reads from and writes to this state.
     """
     # Input
     query: str
     chat_history: Annotated[Sequence[BaseMessage], operator.add]
-    llm: ChatOpenAI
+    llm: ChatOpenAI  # LLM instance passed through the pipeline
     
     # Router outputs
     routing_decision: RoutingDecision | None
@@ -176,9 +78,6 @@ class AgentState(TypedDict):
     final_answer: str | None
     citations: List[int]
     
-    # Memory management
-    summary: str
-    
     # Metadata
     error: str | None
 
@@ -187,54 +86,25 @@ class AgentState(TypedDict):
 # Agent Node Functions
 # ============================================================================
 
-def summarize_node(state: AgentState) -> AgentState:
-    """
-    Summarization Node: Condenses old messages to save tokens.
-    """
-    history = state.get("chat_history", [])
-    if len(history) < 10:
-        return state
-
-    logger.info("🧠 Summarizing old conversation history...")
-    
-    messages_to_summarize = history[:-4]
-    existing_summary = state.get("summary", "")
-    
-    summary_prompt = f"""
-    Distill the following conversation into a concise summary. 
-    Include all key facts, decisions, and user preferences mentioned.
-    
-    Existing Summary: {existing_summary}
-    
-    New messages to incorporate:
-    {messages_to_summarize}
-    
-    Concise Summary:
-    """
-    
-    try:
-        response = state["llm"].invoke(summary_prompt)
-        return {**state, "summary": response.content}
-    except Exception as e:
-        logger.error(f"❌ Summarization failed: {e}")
-        return state
-
-
 def router_node(state: AgentState) -> AgentState:
     """
     Router Agent: Determines which tool/approach to use
     """
     logger.info("🔀 Router Agent: Analyzing query...")
+    
     try:
         router = RouterAgent(llm=state.get("llm"))
-        chat_history = list(state.get("chat_history", []))[-6:]
         decision = router.route(
             state["query"], 
-            chat_history=chat_history,
-            summary=state.get("summary", "")
+            chat_history=list(state.get("chat_history", []))
         )
-        logger.info(f"✅ Routing decision: {decision.tool}")
-        return {**state, "routing_decision": decision}
+        
+        logger.info(f"✅ Routing decision: {decision.tool} - {decision.reasoning}")
+        
+        return {
+            **state,
+            "routing_decision": decision
+        }
     except Exception as e:
         logger.error(f"❌ Router error: {str(e)}")
         return {**state, "error": f"Router failed: {str(e)}"}
@@ -245,15 +115,21 @@ def intent_planning_node(state: AgentState) -> AgentState:
     Intent & Planning Agent: Analyzes intent and creates execution plan
     """
     logger.info("🎯 Intent Planning Agent: Creating execution plan...")
+    
     try:
         intent_agent = IntentPlanningAgent(llm=state.get("llm"))
-        chat_history = list(state.get("chat_history", []))[-6:]
         plan = intent_agent.analyze(
             state["query"],
-            chat_history=chat_history,
-            summary=state.get("summary", "")
+            chat_history=list(state.get("chat_history", []))
         )
-        return {**state, "intent": plan.intent, "plan": plan}
+        
+        logger.info(f"✅ Intent: {plan.intent}, Steps: {len(plan.steps)}")
+        
+        return {
+            **state,
+            "intent": plan.intent,
+            "plan": plan
+        }
     except Exception as e:
         logger.error(f"❌ Intent planning error: {str(e)}")
         return {**state, "error": f"Intent planning failed: {str(e)}"}
@@ -261,46 +137,83 @@ def intent_planning_node(state: AgentState) -> AgentState:
 
 def retrieval_node(state: AgentState) -> AgentState:
     """
-    Retrieval Node: Fetches data based on routing decision
+    Retrieval Node: Fetches data based on routing decision using dedicated agents
     """
     logger.info("📚 Retrieval Node: Fetching relevant data...")
+    
     decision = state.get("routing_decision")
     retrieved_context = []
     web_results = []
     
     try:
+        # Initialize agents
         llm = state.get("llm")
         tool_agent = ToolAgent(llm=llm, enable_web_search=True)
         retriever_agent = RetrieverAgent(llm=llm)
         
-        chat_history = list(state.get("chat_history", []))[-6:]
-        search_query = retriever_agent.refine_query(
-            state["query"], 
-            chat_history,
-            summary=state.get("summary", "")
-        )
+        # Refine query for retrieval if history exists
+        chat_history = list(state.get("chat_history", []))
+        search_query = retriever_agent.refine_query(state["query"], chat_history)
         
         if decision and decision.tool == "web_search":
+            # Use ToolAgent for web search
+            logger.info(f"🔍 Using ToolAgent for web search with query: {search_query}")
+            
             web_results = tool_agent.web_search(search_query, max_results=5)
+            
+            # Format results for context
             if web_results:
-                retrieved_context.append(tool_agent.format_tool_results(web_results))
+                formatted = tool_agent.format_tool_results(web_results)
+                retrieved_context.append(formatted)
+            
+            logger.info(f"✅ Retrieved {len(web_results)} web results")
+        
         elif decision and decision.tool == "targeted_crawl":
+            # Use ToolAgent for URL scraping
+            logger.info(f"🕷️ Using ToolAgent to crawl URL: {decision.target_url}")
+            
             if decision.target_url:
-                retrieved_context.append(tool_agent.scrape_url(decision.target_url))
+                scraped_content = tool_agent.scrape_url(decision.target_url)
+                retrieved_context.append(scraped_content)
+                logger.info("✅ URL crawled successfully")
+        
         elif decision and decision.tool == "internal_retrieval":
+            # Use RetrieverAgent for vector store retrieval
+            logger.info(f"📖 Using RetrieverAgent for internal documents with query: {search_query}")
+            
             docs = retriever_agent.retrieve(search_query, top_k=5)
+            
             if docs:
-                retrieved_context.extend(retriever_agent.format_documents(docs))
+                formatted_docs = retriever_agent.format_documents(docs)
+                retrieved_context.extend(formatted_docs)
+                logger.info(f"✅ Retrieved {len(docs)} internal documents")
+            else:
+                logger.warning("No internal documents found")
+                retrieved_context.append("No relevant internal documents found.")
+        
         elif decision and decision.tool == "calculator":
+            # Use ToolAgent for calculations
+            logger.info("🧮 Using ToolAgent for calculation...")
+            
             result = tool_agent.calculate(state["query"])
             retrieved_context.append(f"Calculation result: {result}")
+            logger.info("✅ Calculation completed")
+        
         else:
+            # Default: use query as context
+            logger.warning("No specific tool selected, using query as context")
             retrieved_context.append(state["query"])
-            
-        return {**state, "retrieved_context": retrieved_context, "web_search_results": web_results}
+        
+        return {
+            **state,
+            "retrieved_context": retrieved_context,
+            "web_search_results": web_results
+        }
+    
     except Exception as e:
         logger.error(f"❌ Retrieval error: {str(e)}")
         return {**state, "error": f"Retrieval failed: {str(e)}"}
+
 
 
 def generator_node(state: AgentState) -> AgentState:
@@ -308,26 +221,41 @@ def generator_node(state: AgentState) -> AgentState:
     Generator Agent: Synthesizes final answer
     """
     logger.info("✍️ Generator Agent: Creating answer...")
+    
     try:
         generator = GeneratorAgent(llm=state.get("llm"))
-        instructions = f"Intent: {state.get('intent')}. Plan: {state.get('plan')}"
         
+        # Prepare instructions from plan
+        instructions = "Generate a comprehensive answer."
+        if state.get("plan"):
+            instructions = f"Intent: {state['intent']}. Follow this plan: {state['plan']}"
+        
+        # Handle critique-based revision
         if state.get("critique") and state.get("needs_revision"):
-            answer = generator.handle_critique(state["draft_answer"], state["critique"])
-            citations = []
+            logger.info("🔄 Revising based on critique...")
+            result = generator.handle_critique(
+                state["draft_answer"],
+                state["critique"]
+            )
+            answer = result if isinstance(result, str) else result.get("answer", "")
         else:
-            chat_history = list(state.get("chat_history", []))[-6:]
+            # Initial generation
             result = generator.generate(
                 question=state["query"],
                 instructions=instructions,
                 context=state.get("retrieved_context", []),
-                chat_history=chat_history,
-                summary=state.get("summary", "")
+                chat_history=list(state.get("chat_history", []))
             )
             answer = result.get("answer", "")
-            citations = result.get("citations", [])
-            
-        return {**state, "draft_answer": answer, "citations": citations}
+        
+        logger.info(f"✅ Generated answer ({len(answer)} chars)")
+        
+        return {
+            **state,
+            "draft_answer": answer,
+            "citations": result.get("citations", []) if isinstance(result, dict) else []
+        }
+    
     except Exception as e:
         logger.error(f"❌ Generator error: {str(e)}")
         return {**state, "error": f"Generator failed: {str(e)}"}
@@ -338,23 +266,41 @@ def critic_node(state: AgentState) -> AgentState:
     Critic Agent: Reviews answer quality
     """
     logger.info("🔍 Critic Agent: Reviewing answer quality...")
+    
     try:
         critic = CriticAgent(llm=state.get("llm"))
+        
         critique = critic.review(
             original_query=state["query"],
             draft_answer=state["draft_answer"],
             source_data=state.get("retrieved_context", [])
         )
-        needs_revision = critique.get("needs_correction", False) and state.get("revision_count", 0) < 2
+        
+        needs_revision = critique.get("needs_correction", False)
+        
+        # Limit revisions to prevent infinite loops
+        revision_count = state.get("revision_count", 0)
+        if revision_count >= 2:
+            logger.warning("⚠️ Max revisions reached, accepting current answer")
+            needs_revision = False
+        
+        logger.info(f"✅ Critique complete. Needs revision: {needs_revision}")
+        
         return {
             **state,
             "critique": critique,
             "needs_revision": needs_revision,
-            "revision_count": state.get("revision_count", 0) + (1 if needs_revision else 0)
+            "revision_count": revision_count + 1 if needs_revision else revision_count
         }
+    
     except Exception as e:
         logger.error(f"❌ Critic error: {str(e)}")
-        return {**state, "needs_revision": False}
+        # Don't fail the pipeline, just skip critique
+        return {
+            **state,
+            "critique": {"needs_correction": False},
+            "needs_revision": False
+        }
 
 
 def finalize_node(state: AgentState) -> AgentState:
@@ -362,10 +308,17 @@ def finalize_node(state: AgentState) -> AgentState:
     Finalize: Prepares the final answer
     """
     logger.info("✨ Finalizing answer...")
+    
     final_answer = state.get("draft_answer", "I apologize, but I couldn't generate an answer.")
+    
+    # Add citations if available
     if state.get("citations"):
         final_answer += f"\n\nCitations: {state['citations']}"
-    return {**state, "final_answer": final_answer}
+    
+    return {
+        **state,
+        "final_answer": final_answer
+    }
 
 
 # ============================================================================
@@ -373,9 +326,18 @@ def finalize_node(state: AgentState) -> AgentState:
 # ============================================================================
 
 def should_revise(state: AgentState) -> str:
-    if state.get("error") or not state.get("needs_revision"):
+    """
+    Determines if the answer needs revision based on critique
+    """
+    if state.get("error"):
         return "finalize"
-    return "revise"
+    
+    if state.get("needs_revision", False):
+        logger.info("🔄 Routing back to generator for revision")
+        return "revise"
+    else:
+        logger.info("✅ Answer approved, finalizing")
+        return "finalize"
 
 
 # ============================================================================
@@ -383,9 +345,13 @@ def should_revise(state: AgentState) -> str:
 # ============================================================================
 
 def create_agent_graph(llm: ChatOpenAI) -> StateGraph:
+    """
+    Creates the complete agent workflow graph
+    """
+    # Create the graph
     workflow = StateGraph(AgentState)
     
-    workflow.add_node("summarize", summarize_node)
+    # Add all nodes
     workflow.add_node("router", router_node)
     workflow.add_node("intent_planning", intent_planning_node)
     workflow.add_node("retrieval", retrieval_node)
@@ -393,30 +359,63 @@ def create_agent_graph(llm: ChatOpenAI) -> StateGraph:
     workflow.add_node("critic", critic_node)
     workflow.add_node("finalize", finalize_node)
     
-    workflow.set_entry_point("summarize")
-    workflow.add_edge("summarize", "router")
+    # Define the flow
+    workflow.set_entry_point("router")
+    
+    # Linear flow with conditional revision loop
     workflow.add_edge("router", "intent_planning")
     workflow.add_edge("intent_planning", "retrieval")
     workflow.add_edge("retrieval", "generator")
     workflow.add_edge("generator", "critic")
     
+    # Conditional edge: revise or finalize
     workflow.add_conditional_edges(
         "critic",
         should_revise,
-        {"revise": "generator", "finalize": "finalize"}
+        {
+            "revise": "generator",  # Loop back for revision
+            "finalize": "finalize"
+        }
     )
+    
+    # End after finalization
     workflow.add_edge("finalize", END)
     
-    checkpointer = get_checkpointer()
-    return workflow.compile(checkpointer=checkpointer)
+    # Add memory/checkpointing
+    memory = MemorySaver()
+    
+    # Compile the graph
+    app = workflow.compile(checkpointer=memory)
+    
+    return app
 
 
 # ============================================================================
-# Execution Functions
+# Main Execution Function
 # ============================================================================
 
-def run_agent_pipeline(query: str, llm: ChatOpenAI, chat_history: List[BaseMessage] = None, thread_id: str = "default", stream: bool = False):
+def run_agent_pipeline(
+    query: str,
+    llm: ChatOpenAI,
+    chat_history: List[BaseMessage] = None,
+    stream: bool = False
+) -> Dict[str, Any]:
+    """
+    Runs the complete agent pipeline (non-streaming only)
+    
+    Args:
+        query: User's question
+        llm: Language model instance
+        chat_history: Previous conversation messages
+        stream: Whether to stream the response (deprecated, use stream_agent_pipeline instead)
+    
+    Returns:
+        Dictionary with final_answer and metadata
+    """
+    # Create the graph
     app = create_agent_graph(llm)
+    
+    # Initialize state
     initial_state = {
         "query": query,
         "chat_history": chat_history or [],
@@ -432,21 +431,38 @@ def run_agent_pipeline(query: str, llm: ChatOpenAI, chat_history: List[BaseMessa
         "revision_count": 0,
         "final_answer": None,
         "citations": [],
-        "summary": "",
         "error": None
     }
     
-    callbacks = [CallbackHandler()] if LANGFUSE_ENABLED else []
+    # Run the pipeline (non-streaming only)
     config = {
-        "configurable": {"thread_id": thread_id}, 
-        "callbacks": callbacks,
-        "metadata": {"session_id": thread_id}
+        "configurable": {"thread_id": "default"},
+        "callbacks": [langfuse_handler] if langfuse_handler else []
     }
-    return app.invoke(initial_state, config)
+    result = app.invoke(initial_state, config)
+    return result
 
 
-def stream_agent_pipeline(query: str, llm: ChatOpenAI, chat_history: List[BaseMessage] = None, thread_id: str = "default"):
+def stream_agent_pipeline(
+    query: str,
+    llm: ChatOpenAI,
+    chat_history: List[BaseMessage] = None
+):
+    """
+    Runs the complete agent pipeline in streaming mode (synchronous generator)
+    
+    Args:
+        query: User's question
+        llm: Language model instance
+        chat_history: Previous conversation messages
+    
+    Yields:
+        Events from the pipeline execution
+    """
+    # Create the graph
     app = create_agent_graph(llm)
+    
+    # Initialize state
     initial_state = {
         "query": query,
         "chat_history": chat_history or [],
@@ -462,22 +478,28 @@ def stream_agent_pipeline(query: str, llm: ChatOpenAI, chat_history: List[BaseMe
         "revision_count": 0,
         "final_answer": None,
         "citations": [],
-        "summary": "",
         "error": None
     }
     
-    callbacks = [CallbackHandler()] if LANGFUSE_ENABLED else []
+    # Run the pipeline in streaming mode
     config = {
-        "configurable": {"thread_id": thread_id}, 
-        "callbacks": callbacks,
-        "metadata": {"session_id": thread_id}
+        "configurable": {"thread_id": "default"},
+        "callbacks": [langfuse_handler] if langfuse_handler else []
     }
     for event in app.stream(initial_state, config):
         yield event
 
 
-async def stream_agent_response(query: str, llm: ChatOpenAI, thread_id: str = "default"):
+# ============================================================================
+# Streaming Generator for API
+# ============================================================================
+
+async def stream_agent_response(query: str, llm: ChatOpenAI):
+    """
+    Async generator for streaming responses
+    """
     app = create_agent_graph(llm)
+    
     initial_state = {
         "query": query,
         "chat_history": [],
@@ -493,18 +515,17 @@ async def stream_agent_response(query: str, llm: ChatOpenAI, thread_id: str = "d
         "revision_count": 0,
         "final_answer": None,
         "citations": [],
-        "summary": "",
         "error": None
     }
     
-    callbacks = [CallbackHandler()] if LANGFUSE_ENABLED else []
     config = {
-        "configurable": {"thread_id": thread_id}, 
-        "callbacks": callbacks,
-        "metadata": {"session_id": thread_id}
+        "configurable": {"thread_id": "default"},
+        "callbacks": [langfuse_handler] if langfuse_handler else []
     }
     
+    # Stream events
     async for event in app.astream(initial_state, config):
+        # Extract the node name and state
         for node_name, node_state in event.items():
             yield {
                 "node": node_name,
@@ -513,7 +534,6 @@ async def stream_agent_response(query: str, llm: ChatOpenAI, thread_id: str = "d
                     "final_answer": node_state.get("final_answer"),
                     "routing_decision": str(node_state.get("routing_decision")),
                     "intent": node_state.get("intent"),
-                    "summary": node_state.get("summary"),
                     "error": node_state.get("error")
                 }
             }
