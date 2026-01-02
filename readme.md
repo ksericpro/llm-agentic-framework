@@ -329,7 +329,7 @@ llm-agentic/
 - **Features**: Citation extraction, format control, confidence scoring
 - **Output**: Draft answer with citations
 
-### 7. Critic Agent
+### 8. Critic Agent
 - **Purpose**: Quality assurance and hallucination detection
 - **Checks**: Factual consistency, completeness, safety
 - **Output**: Pass/fail verdict with correction instructions
@@ -421,10 +421,5 @@ For issues or questions:
 
 **Built with ❤️ using LangChain, LangGraph, and FastAPI**
 
-# HOW to run
-
-# server
-cd orchestrator && uv run api.py
-
-# ui
+# 5. Run UI
 cd ui/streamlit-ui && uv run streamlit run app.py
