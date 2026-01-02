@@ -20,6 +20,7 @@ openai>=1.10.0
 
 # Tools & Utilities
 tavily-python>=0.3.0  # For web search
+langchain-tavily>=0.1.0  # New Tavily integration (replaces deprecated TavilySearchResults)
 httpx>=0.26.0
 aiohttp>=3.9.1
 

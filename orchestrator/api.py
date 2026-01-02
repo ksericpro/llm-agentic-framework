@@ -7,32 +7,41 @@ import os
 from dotenv import load_dotenv
 
 # Load environment variables as early as possible
-# This ensures that module-level initializations in imported files (like Langfuse)
-# have access to the environment variables.
 load_dotenv()
+
+# Suppress annoying UserWarnings from langchain-tavily (shadowing attributes)
+import warnings
+warnings.filterwarnings("ignore", message='Field name "output_schema" in "TavilyResearch" shadows an attribute in parent "BaseTool"')
+warnings.filterwarnings("ignore", message='Field name "stream" in "TavilyResearch" shadows an attribute in parent "BaseTool"')
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, AIMessage
 from contextlib import asynccontextmanager
 import json
 import logging
 from logger_config import setup_logger
+from pymongo import MongoClient
 
 # Import the pipeline
 from langchain_pipeline import (
     run_agent_pipeline, 
     stream_agent_response, 
     get_all_sessions, 
-    get_session_state
+    get_session_state,
+    get_checkpointer,
+    clear_all_sessions,
+    clear_session_context
 )
 
 # Configure logging
 logger = setup_logger("api")
 
+# Global MongoDB client for reuse
+mongodb_client = None
 
 # ============================================================================
 # Lifespan Event Handler
@@ -105,9 +114,11 @@ class QueryRequest(BaseModel):
     )
     temperature: Optional[float] = Field(
         default=0.7,
-        description="Temperature for LLM",
-        ge=0.0,
-        le=2.0
+        description="LLM temperature (0.0 to 1.0)"
+    )
+    target_language: Optional[str] = Field(
+        default=None,
+        description="Universal translation: if set, all answers will be translated to this language."
     )
 
 
@@ -119,6 +130,21 @@ class QueryResponse(BaseModel):
     intent: Optional[str] = None
     routing_decision: Optional[str] = None
     citations: Optional[List[int]] = None
+    error: Optional[str] = None
+
+
+class FeedbackRequest(BaseModel):
+    """Request model for user feedback"""
+    session_id: str = Field(..., description="Session ID")
+    message_index: int = Field(..., description="Index of the message in the chat")
+    feedback_type: str = Field(..., description="Feedback type: 'up' or 'down'")
+    user_query: str = Field(..., description="Original user query")
+    assistant_response: str = Field(..., description="Assistant's response")
+    routing_decision: Optional[str] = Field(None, description="Routing decision made")
+    intent: Optional[str] = Field(None, description="Detected intent")
+    response_time_ms: Optional[int] = Field(None, description="Response time in milliseconds")
+    model_used: Optional[str] = Field("gpt-4o-mini", description="Model used for response")
+
     error: Optional[str] = None
 
 
@@ -217,7 +243,8 @@ async def query_pipeline(request: QueryRequest):
             llm=llm,
             chat_history=chat_history,
             thread_id=request.session_id,
-            stream=False
+            stream=False,
+            target_language=request.target_language
         )
         
         # Extract response data
@@ -265,7 +292,12 @@ async def stream_query(request: QueryRequest):
                 yield f"data: {json.dumps({'event': 'start', 'query': request.query})}\n\n"
                 
                 # Stream pipeline events
-                async for event in stream_agent_response(request.query, llm, thread_id=request.session_id):
+                async for event in stream_agent_response(
+                    request.query, 
+                    llm, 
+                    thread_id=request.session_id,
+                    target_language=request.target_language
+                ):
                     event_data = json.dumps(event)
                     yield f"data: {event_data}\n\n"
                 
@@ -322,6 +354,20 @@ async def list_sessions():
         return {"success": False, "error": str(e)}
 
 
+@app.delete("/api/sessions")
+async def delete_all_sessions():
+    """Clear all chat sessions from MongoDB"""
+    try:
+        success = clear_all_sessions()
+        if success:
+            return {"success": True, "message": "All sessions cleared"}
+        else:
+            return {"success": False, "error": "Failed to clear sessions"}
+    except Exception as e:
+        logger.error(f"Failed to clear sessions: {e}")
+        return {"success": False, "error": str(e)}
+
+
 @app.get("/api/sessions/{session_id}")
 async def get_session(session_id: str):
     """Get the state and history for a specific session"""
@@ -332,9 +378,30 @@ async def get_session(session_id: str):
         
         # Format history for the UI
         history = []
-        for msg in state.get("chat_history", []):
-            role = "user" if isinstance(msg, HumanMessage) else "assistant"
-            history.append({"role": role, "content": msg.content})
+        raw_history = state.get("chat_history", [])
+        
+        for msg in raw_history:
+            # Handle both LangChain message objects and dictionaries
+            content = ""
+            role = ""
+            
+            if hasattr(msg, 'content'):
+                content = msg.content
+                if isinstance(msg, HumanMessage):
+                    role = "user"
+                elif isinstance(msg, AIMessage):
+                    role = "assistant"
+                # Ignore ToolMessage, SystemMessage, etc.
+            elif isinstance(msg, dict):
+                content = msg.get('content', '')
+                msg_type = msg.get('type') or msg.get('role')
+                if msg_type in ['human', 'user']:
+                    role = "user"
+                elif msg_type in ['ai', 'assistant']:
+                    role = "assistant"
+            
+            if content and role:
+                history.append({"role": role, "content": content})
             
         return {
             "success": True, 
@@ -344,6 +411,165 @@ async def get_session(session_id: str):
         }
     except Exception as e:
         logger.error(f"Failed to get session {session_id}: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@app.delete("/api/sessions/{session_id}")
+async def forget_session(session_id: str):
+    """Clear/forget the context for a specific session (keeps session ID but resets history)"""
+    try:
+        success = clear_session_context(session_id)
+        if success:
+            return {
+                "success": True, 
+                "message": f"Context cleared for session '{session_id}'. You can continue with a fresh start."
+            }
+        else:
+            return {"success": False, "error": "Failed to clear session context"}
+    except Exception as e:
+        logger.error(f"Failed to clear session {session_id}: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@app.post("/api/feedback")
+async def save_feedback(request: FeedbackRequest):
+    """Save user feedback (thumbs up/down) for analytics and optimization"""
+    try:
+        mongo_url = os.getenv("MONGO_URL")
+        if not mongo_url:
+            logger.warning("MongoDB not configured, feedback not saved")
+            return {"success": False, "error": "Database not configured"}
+        
+        # Connect to MongoDB
+        global mongodb_client
+        if mongodb_client is None:
+            from pymongo import MongoClient
+            mongodb_client = MongoClient(mongo_url, serverSelectionTimeoutMS=5000)
+        
+        db = mongodb_client["agentic_pipeline"]
+        feedback_collection = db["message_feedback"]
+        
+        # Create feedback document
+        from datetime import datetime
+        feedback_doc = {
+            "session_id": request.session_id,
+            "message_index": request.message_index,
+            "timestamp": datetime.utcnow(),
+            "user_query": request.user_query,
+            "assistant_response": request.assistant_response,
+            "routing_decision": request.routing_decision,
+            "intent": request.intent,
+            "feedback_type": request.feedback_type,
+            "response_time_ms": request.response_time_ms,
+            "model_used": request.model_used
+        }
+        
+        # Insert into database
+        result = feedback_collection.insert_one(feedback_doc)
+        logger.info(f"📊 Feedback saved: {request.feedback_type} for session {request.session_id}, message {request.message_index}")
+        
+        return {
+            "success": True,
+            "feedback_id": str(result.inserted_id),
+            "message": "Feedback saved successfully"
+        }
+    except Exception as e:
+        logger.error(f"Failed to save feedback: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@app.get("/api/analytics/feedback")
+async def get_feedback_analytics(
+    start_date: str = None,
+    routing_decision: str = None,
+    limit: int = 100
+):
+    """Get feedback analytics and insights"""
+    try:
+        mongo_url = os.getenv("MONGO_URL")
+        if not mongo_url:
+            return {"success": False, "error": "Database not configured"}
+        
+        global mongodb_client
+        if mongodb_client is None:
+            from pymongo import MongoClient
+            mongodb_client = MongoClient(mongo_url, serverSelectionTimeoutMS=5000)
+        
+        db = mongodb_client["agentic_pipeline"]
+        feedback_collection = db["message_feedback"]
+        
+        # Build query filter
+        query_filter = {}
+        if start_date:
+            from datetime import datetime
+            query_filter["timestamp"] = {"$gte": datetime.fromisoformat(start_date)}
+        if routing_decision:
+            query_filter["routing_decision"] = routing_decision
+        
+        # Get overall statistics
+        total_feedback = feedback_collection.count_documents(query_filter)
+        thumbs_up = feedback_collection.count_documents({**query_filter, "feedback_type": "up"})
+        thumbs_down = feedback_collection.count_documents({**query_filter, "feedback_type": "down"})
+        
+        satisfaction_rate = (thumbs_up / total_feedback * 100) if total_feedback > 0 else 0
+        
+        # Get statistics by routing decision
+        pipeline = [
+            {"$match": query_filter},
+            {"$group": {
+                "_id": "$routing_decision",
+                "total": {"$sum": 1},
+                "thumbs_up": {
+                    "$sum": {"$cond": [{"$eq": ["$feedback_type", "up"]}, 1, 0]}
+                },
+                "thumbs_down": {
+                    "$sum": {"$cond": [{"$eq": ["$feedback_type", "down"]}, 1, 0]}
+                }
+            }},
+            {"$project": {
+                "routing_decision": "$_id",
+                "total": 1,
+                "thumbs_up": 1,
+                "thumbs_down": 1,
+                "satisfaction_rate": {
+                    "$multiply": [
+                        {"$divide": ["$thumbs_up", "$total"]},
+                        100
+                    ]
+                }
+            }},
+            {"$sort": {"satisfaction_rate": -1}}
+        ]
+        
+        by_routing = list(feedback_collection.aggregate(pipeline))
+        
+        # Get recent feedback
+        recent_feedback = list(
+            feedback_collection.find(query_filter)
+            .sort("timestamp", -1)
+            .limit(limit)
+        )
+        
+        # Convert ObjectId to string for JSON serialization
+        for item in recent_feedback:
+            item["_id"] = str(item["_id"])
+            item["timestamp"] = item["timestamp"].isoformat()
+        
+        logger.info(f"📊 Analytics retrieved: {total_feedback} total feedback entries")
+        
+        return {
+            "success": True,
+            "summary": {
+                "total_feedback": total_feedback,
+                "thumbs_up": thumbs_up,
+                "thumbs_down": thumbs_down,
+                "satisfaction_rate": round(satisfaction_rate, 2)
+            },
+            "by_routing_decision": by_routing,
+            "recent_feedback": recent_feedback[:10]  # Return only 10 most recent
+        }
+    except Exception as e:
+        logger.error(f"Analytics query failed: {e}")
         return {"success": False, "error": str(e)}
 
 

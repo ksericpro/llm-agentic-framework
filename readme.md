@@ -4,13 +4,14 @@ A production-ready multi-agent LLM pipeline built with **LangChain**, **LangGrap
 
 ## 🌟 Features
 
-- **Multi-Agent Architecture**: Router, Intent Planning, Retrieval, Generator, and Critic agents
-- **Streaming Support**: Real-time Server-Sent Events (SSE) for progressive responses
-- **LangGraph Orchestration**: State-based workflow with conditional routing and revision loops
-- **RESTful API**: FastAPI endpoints for easy integration
-- **Web Search Integration**: Tavily API for current information retrieval
-- **Quality Assurance**: Built-in critic agent for answer validation
-- **Conversation Memory**: Support for chat history and context
+- **Multi-Agent Architecture**: Router, Intent Planning, Retrieval, Translator, Generator, and Critic agents.
+- **Advanced Web Crawling (NEW)**: Integration with **Crawl4AI** for JavaScript rendering and clean Markdown extraction.
+- **Multilingual Support (NEW)**: Built-in **Translation Agent** for universal output in Chinese, Spanish, French, German, and Japanese.
+- **Hierarchical Memory (NEW)**: Scalable conversation history using multi-level summarization for 100+ message sessions.
+- **Observability (NEW)**: Full tracing and monitoring integrated with **Langfuse**.
+- **Real-time Streaming**: Progressive responses via Server-Sent Events (SSE).
+- **Persistent Feedback**: Built-in thumbs up/down system with MongoDB storage and analytics.
+- **Smart UI**: Modern Streamlit dashboard with sticky headers, session history (24h filter), and tool-usage badges.
 
 ## 📋 Architecture
 
@@ -32,20 +33,22 @@ User Query
 │  (Fetches data: web search, crawl, vector store)        │
 └─────────────────────────────────────────────────────────┘
     ↓
-┌─────────────────────────────────────────────────────────┐
-│                 Generator Agent                          │
-│         (Synthesizes final answer)                       │
-└─────────────────────────────────────────────────────────┘
-    ↓
-┌─────────────────────────────────────────────────────────┐
-│                  Critic Agent                            │
-│    (Reviews quality, checks for hallucinations)          │
-└─────────────────────────────────────────────────────────┘
-    ↓
-    ├─ Needs Revision? → Loop back to Generator
-    └─ Approved → Finalize
-         ↓
-    Final Answer
+    ├─ Tool: translate? ──────────┐
+    ↓                             ↓
+┌─────────────────────┐    ┌─────────────────────┐
+│   Generator Agent   │    │  Translation Agent  │
+│ (Synthesis + RAG)   │    │ (Direct Translation)│
+└─────────────────────┘    └─────────────────────┘
+    ↓                             ↓
+┌─────────────────────┐           │
+│    Critic Agent     │           │
+│ (Quality Assurance) │           │
+└─────────────────────┘           │
+    ↓                             ↓
+    ├─ Needs Revision? ───────────┤
+    └─ Approved ──────────────────┤
+                                  ↓
+                             Final Answer
 ```
 
 ## 🚀 Quick Start
@@ -56,8 +59,11 @@ User Query
 # Clone or navigate to the project
 cd c:\Projects\llm-framework
 
-# Install dependencies
-pip install -r requirements.txt
+# Install dependencies using uv (recommended for speed)
+uv pip install -r requirements.txt
+
+# Install Playwright browsers (for Advanced Crawler)
+uv run playwright install chromium
 ```
 
 ### 2. Configuration
@@ -267,6 +273,7 @@ eventSource.onmessage = (event) => {
 | `stream` | boolean | `false` | Enable streaming response |
 | `model` | string | `gpt-4o-mini` | OpenAI model to use |
 | `temperature` | float | `0.7` | LLM temperature (0.0-2.0) |
+| `target_language` | string | `English` | Global translation (Chinese, Spanish, French, etc.) |
 
 ### Supported Models
 
@@ -283,11 +290,12 @@ llm-framework/
 ├── langchain_pipeline.py       # LangGraph pipeline implementation
 ├── router_agent.py             # Router agent
 ├── intentplanning_agent.py     # Intent & planning agent
+├── translation_agent.py        # Translation agent (NEW)
 ├── generator_agent.py          # Answer generator agent
 ├── critic_agent.py             # Quality assurance agent
-├── retriever_agent.py          # Vector store retrieval agent (NEW)
-├── tool_agent.py               # Tool execution agent (NEW)
-├── WebAgentWithGoogle.py       # Web search agent
+├── retriever_agent.py          # Vector store retrieval agent
+├── tool_agent.py               # Tool execution agent
+├── crawler_agent.py            # Advanced Crawl4AI implementation
 ├── example_client.py           # Example client code
 ├── requirements.txt            # Python dependencies
 ├── .env.example                # Environment variables template
@@ -298,8 +306,8 @@ llm-framework/
 
 ### 1. Router Agent
 - **Purpose**: Determines the best tool/approach for the query
-- **Decisions**: `web_search`, `targeted_crawl`, `internal_retrieval`, `calculator`
-- **Output**: Routing decision with reasoning
+- **Decisions**: `web_search`, `targeted_crawl`, `internal_retrieval`, `calculator`, `translate`
+- **Output**: Routing decision with reasoning and target metadata
 
 ### 2. Intent & Planning Agent
 - **Purpose**: Analyzes user intent and creates execution plan
@@ -314,22 +322,34 @@ llm-framework/
   - Document formatting
 - **Output**: Retrieved documents with metadata
 
-### 4. Tool Agent (NEW)
+### 4. Tool Agent
 - **Purpose**: Manages and executes various tools
+- **Advanced Crawler**: Uses **Crawl4AI** for high-quality Markdown scraping with JS rendering.
 - **Tools**:
-  - Web search (Tavily API)
-  - Calculator (math expressions)
-  - Web scraper (URL content extraction)
-  - API caller (HTTP requests)
-  - Custom tools (extensible)
-- **Output**: Tool execution results
+  - Web search (Tavily Python API - updated version)
+  - Calculator (safe mathematical evaluation)
+  - API caller (standard HTTP requests)
+- **Output**: Tool execution results formatted for LLMs.
 
-### 5. Generator Agent
+### 5. Memory Management (NEW)
+- **Hierarchical Summarization**: Prevents context loss in extremely long conversations by summarizing previous summaries.
+- **Context Clearing**: Supports `/forget` command to reset memory while maintaining session persistence.
+- **Visual Warnings**: UI alerts when conversation length may impact performance.
+
+### 6. Translation Agent (NEW)
+- **Purpose**: Specialized linguistic agent for high-quality translation.
+- **Features**: 
+  - Preserves Markdown formatting.
+  - Maintains tone and nuances.
+  - Supports Universal UI Translation (Global Toggle).
+  - Standalone "Translate Tool" for fast direct queries.
+
+### 7. Generator Agent
 - **Purpose**: Synthesizes final answer from context
 - **Features**: Citation extraction, format control, confidence scoring
 - **Output**: Draft answer with citations
 
-### 6. Critic Agent
+### 7. Critic Agent
 - **Purpose**: Quality assurance and hallucination detection
 - **Checks**: Factual consistency, completeness, safety
 - **Output**: Pass/fail verdict with correction instructions
@@ -445,4 +465,7 @@ For issues or questions:
 uv run api.py
 
 # ui
-uv run streamlit run ui/app.py
+cd ui/streamlit-ui && uv run streamlit run app.py
+
+# test
+uv run python orchestrator/final_guitar_test.py

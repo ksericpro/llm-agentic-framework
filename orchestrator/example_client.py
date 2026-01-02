@@ -11,7 +11,7 @@ from typing import Optional, List, Dict
 class AgenticPipelineClient:
     """Client for interacting with the LangChain Agentic Pipeline API"""
     
-    def __init__(self, base_url: str = "http://localhost:8000"):
+    def __init__(self, base_url: str = "http://127.0.0.1:8000"):
         self.base_url = base_url
         self.session = requests.Session()
     
@@ -262,15 +262,17 @@ def example_rich_dad_poor_dad_questions():
 def example_rich_dad_streaming():
     """Example: Streaming query about Rich Dad Poor Dad"""
     print("\n" + "=" * 80)
-    print("RICH DAD POOR DAD - STREAMING QUERY")
+    print("RICH DAD POOR DAD - STREAMING QUERY (RAG TEST)")
     print("=" * 80)
     
     client = AgenticPipelineClient()
     
-    query = "Summarize the main principles of building wealth according to Rich Dad Poor Dad"
+    query = "What are the most important lessons written in Rich Dad Poor Dad?"
     
     print(f"\nQuery: {query}")
     print("\nStreaming response:\n")
+    
+    routing_used = None
     
     for event in client.stream_query(query, temperature=0.3):
         event_type = event.get('event')
@@ -280,6 +282,19 @@ def example_rich_dad_streaming():
         
         elif event_type == 'complete':
             print("\n✅ Pipeline complete!")
+            
+            # Summary of routing
+            if routing_used:
+                print(f"\n{'='*80}")
+                print(f"ROUTING SUMMARY:")
+                print(f"{'='*80}")
+                if "internal_retrieval" in routing_used.lower():
+                    print(f"✅ RAG WAS USED! Tool: {routing_used}")
+                    print(f"   This means the answer came from your PDF knowledge base!")
+                else:
+                    print(f"⚠️  RAG NOT USED. Tool: {routing_used}")
+                    print(f"   The answer came from: {routing_used}")
+                print(f"{'='*80}")
         
         elif event_type == 'error':
             print(f"\n❌ Error: {event['error']}")
@@ -291,17 +306,30 @@ def example_rich_dad_streaming():
             
             print(f"\n📍 Node: {node}")
             
-            if state.get('routing_decision'):
-                print(f"   Routing: {state['routing_decision']}")
+            if state.get('routing_decision') and state['routing_decision'] not in ['None', None]:
+                routing_str = state['routing_decision']
+                routing_used = routing_str
+                print(f"   🔀 Routing: {routing_str}")
+                
+                # Parse and highlight if RAG is used
+                if "internal_retrieval" in routing_str.lower():
+                    print(f"   ✅ RAG/Internal Retrieval ACTIVATED!")
+                elif "web_search" in routing_str.lower():
+                    print(f"   🌐 Web Search activated (not using RAG)")
+                elif "calculator" in routing_str.lower():
+                    print(f"   🔢 Calculator activated (not using RAG)")
             
             if state.get('intent'):
-                print(f"   Intent: {state['intent']}")
+                print(f"   🎯 Intent: {state['intent']}")
             
             if state.get('retrieved_docs'):
-                print(f"   Retrieved: {len(state['retrieved_docs'])} documents")
+                print(f"   📚 Retrieved: {len(state['retrieved_docs'])} documents from knowledge base")
             
             if state.get('final_answer'):
-                print(f"\n   Final Answer:\n   {state['final_answer']}")
+                print(f"\n   📝 Final Answer:")
+                print(f"   {'-'*76}")
+                print(f"   {state['final_answer']}")
+                print(f"   {'-'*76}")
 
 
 def example_all_tools_demo():
@@ -324,6 +352,11 @@ def example_all_tools_demo():
             "tool": "WEB CRAWLER (Targeted Scrape)",
             "query": "Summarize the key features from this page: https://www.python.org/about/",
             "note": "Triggered by the presence of an explicit URL."
+        },
+        {
+            "tool": "GUITAR GALLERY TEST",
+            "query": "Extract the contact information and location from https://www.guitargallery.com.sg/",
+            "note": "Testing targeted crawl on a specific commercial site."
         },
         {
             "tool": "CALCULATOR",
@@ -350,20 +383,46 @@ def example_all_tools_demo():
             print(f"❌ Failed: {e}")
 
 
-def example_error_handling():
-    """Example: Error handling"""
+def example_guitar_gallery():
+    """Example: Specific web crawl test for Guitar Gallery"""
     print("\n" + "=" * 80)
-    print("ERROR HANDLING EXAMPLE")
+    print("GUITAR GALLERY ADVANCED CRAWL TEST")
     print("=" * 80)
     
     client = AgenticPipelineClient()
+    query = "What acoustic guitars are currently featured on https://www.guitargallery.com.sg/ and what are their prices?"
     
-    try:
-        # Try with empty query (should fail validation)
-        result = client.query("")
-    except requests.exceptions.HTTPError as e:
-        print(f"\n✅ Caught expected error: {e}")
-        print(f"   Response: {e.response.json()}")
+    print(f"🚀 Sending individual query: \"{query}\"")
+    print("⏳ This uses Crawl4AI (JavaScript rendering), so it might take 5-10 seconds...")
+    print("-" * 80)
+    
+    # Using streaming for better feedback
+    routing_used = None
+    final_answer = None
+    for event in client.stream_query(query, temperature=0.1):
+        if 'node' in event:
+            node = event.get('node')
+            state = event.get('state', {})
+            
+            # Show routing decision if present
+            if state.get('routing_decision'):
+                routing_used = state['routing_decision']
+                print(f"\n📍 Node: {node}")
+                print(f"   🔀 Decision: {routing_used}")
+            elif node:
+                print(f"\n📍 Node: {node}")
+            
+            # Capture final answer if present
+            if state.get('final_answer'):
+                final_answer = state['final_answer']
+                
+        elif event.get('event') == 'complete':
+            print(f"\n✅ FINISHED")
+            if final_answer:
+                print(f"\n📝 FINAL ANSWER:\n{final_answer}")
+            print(f"\nTool Used: {routing_used}")
+        elif event.get('event') == 'error':
+            print(f"\n❌ ERROR: {event.get('error')}")
 
 
 # ============================================================================
@@ -386,10 +445,13 @@ if __name__ == "__main__":
         
         # Rich Dad Poor Dad knowledge base examples
         # example_rich_dad_poor_dad_questions()
-        # example_rich_dad_streaming()
+        # example_rich_dad_streaming() 
         
         # Tool activation demonstration
-        example_all_tools_demo()
+        # example_all_tools_demo()
+        
+        # Individual targeted crawl test
+        example_guitar_gallery()
         
         print("\n" + "=" * 80)
         print("ALL EXAMPLES COMPLETED!")

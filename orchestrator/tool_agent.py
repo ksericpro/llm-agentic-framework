@@ -5,15 +5,27 @@ Supports: Web search, calculators, API calls, custom tools
 
 from typing import List, Dict, Any, Optional, Callable
 from langchain_core.tools import Tool, BaseTool
-from langchain_community.tools.tavily_search import TavilySearchResults
+
+# Suppress annoying UserWarnings from langchain-tavily
+import warnings
+warnings.filterwarnings("ignore", message='Field name "output_schema" in "TavilyResearch" shadows an attribute in parent "BaseTool"')
+warnings.filterwarnings("ignore", message='Field name "stream" in "TavilyResearch" shadows an attribute in parent "BaseTool"')
+
+try:
+    from langchain_tavily import TavilySearch
+    TAVILY_NEW_PACKAGE = True
+except ImportError:
+    # Fallback to old package if new one not available
+    from langchain_community.tools.tavily_search import TavilySearchResults
+    TAVILY_NEW_PACKAGE = False
 from langgraph.prebuilt import create_react_agent
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from pydantic import BaseModel, Field
-import logging
 from logger_config import setup_logger
 import math
 import requests
+from crawler_agent import CrawlerAgent
 
 logger = setup_logger("tool_agent")
 
@@ -55,31 +67,10 @@ def calculator_tool(expression: str) -> str:
 
 def web_scraper_tool(url: str) -> str:
     """
-    Scrape content from a URL
-    
-    Args:
-        url: URL to scrape
-    
-    Returns:
-        Page content or error message
+    Scrape content from a URL using CrawlerAgent
     """
-    try:
-        logger.info(f"Scraping URL: {url}")
-        
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-        }
-        response = requests.get(url, headers=headers, timeout=10)
-        response.raise_for_status()
-        
-        # Simple text extraction (you could use BeautifulSoup for better parsing)
-        content = response.text[:5000]  # Limit to first 5000 chars
-        
-        return f"Content from {url}:\n{content}"
-    
-    except Exception as e:
-        logger.error(f"Scraping error: {e}")
-        return f"Error scraping {url}: {str(e)}"
+    crawler = CrawlerAgent()
+    return crawler.scrape(url)
 
 
 def api_caller_tool(endpoint: str, method: str = "GET", data: Optional[Dict] = None) -> str:
@@ -170,14 +161,19 @@ class ToolAgent:
         # Web search tool (Tavily)
         if enable_web_search:
             try:
-                web_search = TavilySearchResults(
-                    max_results=5,
-                    include_answer=True,
-                    include_raw_content=True,
-                    search_depth="advanced"
-                )
+                if TAVILY_NEW_PACKAGE:
+                    web_search = TavilySearch(
+                        max_results=5
+                    )
+                else:
+                    web_search = TavilySearchResults(
+                        max_results=5,
+                        include_answer=True,
+                        include_raw_content=True,
+                        search_depth="advanced"
+                    )
                 self.tools.append(web_search)
-                logger.info("Web search tool enabled (Tavily)")
+                logger.info(f"Web search tool enabled ({'TavilySearch' if TAVILY_NEW_PACKAGE else 'TavilySearchResults'})")
             except Exception as e:
                 logger.warning(f"Could not enable web search: {e}")
         
@@ -186,23 +182,13 @@ class ToolAgent:
     def _create_agent_executor(self):
         """Create an agent executor for autonomous tool usage"""
         
-        system_prompt = """You are a helpful assistant with access to various tools.
-        Use tools when necessary to answer questions accurately.
-        
-        Available tools:
-        - calculator: For mathematical calculations
-        - web_scraper: To fetch content from URLs
-        - api_caller: To make HTTP API calls
-        - tavily_search_results_json: To search the web for current information
-        
-        Think step by step and use the most appropriate tool for each task.
-        """
+        # Note: The system prompt is now handled differently in newer LangGraph versions
+        # The agent will use the tools' descriptions to understand how to use them
         
         # Create react agent using LangGraph
         agent_executor = create_react_agent(
             self.llm, 
-            self.tools,
-            state_modifier=system_prompt
+            self.tools
         )
         
         return agent_executor
@@ -316,15 +302,19 @@ class ToolAgent:
             return []
         
         try:
+            print(f"      [TOOL] 🌍 Calling Tavily Search Engine...")
             results = tavily_tool.func({"query": query})
             
             if isinstance(results, list):
+                print(f"      [TOOL] ✅ Found {len(results)} results from Tavily.")
                 return results[:max_results]
             else:
+                print(f"      [TOOL] ✅ Found 1 result from Tavily.")
                 return [results]
         
         except Exception as e:
             logger.error(f"Web search error: {e}")
+            print(f"      [TOOL] ❌ Web search failed: {e}")
             return []
     
     def calculate(self, expression: str) -> str:
@@ -341,7 +331,7 @@ class ToolAgent:
     
     def scrape_url(self, url: str) -> str:
         """
-        Scrape content from URL
+        Scrape content from URL using CrawlerAgent
         
         Args:
             url: URL to scrape
@@ -349,7 +339,8 @@ class ToolAgent:
         Returns:
             Scraped content
         """
-        return self.execute_tool("web_scraper", url)
+        crawler = CrawlerAgent()
+        return crawler.scrape(url)
     
     def add_custom_tool(
         self,

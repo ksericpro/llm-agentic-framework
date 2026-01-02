@@ -8,7 +8,7 @@ logger = setup_logger("router")
 
 class RoutingDecision(BaseModel):
     """Structured output for the router's decision."""
-    tool: Literal["web_search", "targeted_crawl", "internal_retrieval", "calculator"] = Field(
+    tool: Literal["web_search", "targeted_crawl", "internal_retrieval", "calculator", "translate"] = Field(
         description="The tool best suited for the query."
     )
     reasoning: str = Field(description="Brief reasoning for the choice.")
@@ -17,6 +17,9 @@ class RoutingDecision(BaseModel):
     )
     search_query: str | None = Field(
         description="If web searching, the optimized query string."
+    )
+    target_language: str | None = Field(
+        description="If translating, the target language (e.g., 'Chinese', 'Spanish'). Otherwise None."
     )
 
 class RouterAgent:
@@ -32,20 +35,35 @@ class RouterAgent:
             {summary}
             
             **Decision Rules:**
-            1. Use `web_search` for:
-               - Questions about current events, news, or recent developments.
-               - Open-ended "find information about X" queries.
-               - When a specific source is NOT mentioned.
+            1. Use `internal_retrieval` for:
+               - Questions about books, PDFs, or documents in our knowledge base
+               - Queries mentioning specific book titles (e.g., "Rich Dad Poor Dad", "Think and Grow Rich")
+               - Questions about "our documents", "internal docs", "knowledge base", or "PDF"
+               - Requests to summarize, explain, or extract information from stored documents
+               - Questions about lessons, principles, or content from books we have
+               **IMPORTANT**: Always prefer internal_retrieval for book-related queries before web_search
             
-            2. Use `targeted_crawl` ONLY when:
-               - The query EXPLICITLY mentions a specific, full URL (http://...).
-               - The ask is to summarize, extract, or analyze content FROM that specific page.
+            2. Use `web_search` for:
+               - Questions about current events, news, or recent developments
+               - Open-ended "find information about X" queries where we don't have internal docs
+               - When a specific source is NOT mentioned AND it's not about a book/document
+               - Real-time information or latest updates
             
-            3. Use `internal_retrieval` for:
-               - Questions about our internal documents, company data, or private knowledge base.
+            3. Use `targeted_crawl` ONLY when:
+               - The query mentions a specific, full URL (http://...)
+               - The user wants to "search", "find", "extract", "summarize", or "get info" FROM that specific URL.
+               - **IMPORTANT**: If a URL is provided, do NOT give generic advice on how to use the site; instead, use this tool to fetch the actual data.
             
             4. Use `calculator` for:
-               - Mathematical calculations, conversions, or formula-based problems.
+               - Mathematical calculations, conversions, or formula-based problems
+            
+            5. Use `translate` for:
+               - Requests to translate text, phrases, or entire responses into another language
+               - Queries like "translate this to Chinese", "how do you say X in Spanish", or "interpret this as French"
+               - If the user asks for a translation of a previous answer, or asks to reply in a specific language.
+            
+            **Priority Order for Book Queries:**
+            Book/Document Question → internal_retrieval FIRST → web_search only if retrieval fails
             
             Return your decision as structured JSON."""),
             MessagesPlaceholder(variable_name="chat_history"),

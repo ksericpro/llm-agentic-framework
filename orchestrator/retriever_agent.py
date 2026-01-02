@@ -156,6 +156,7 @@ class RetrieverAgent:
         
         try:
             logger.info(f"Retrieving top {k} documents for query: {query[:100]}...")
+            print(f"      [RAG] 🔍 Similarity search (top_k={k})...")
             
             # Perform similarity search
             if filters:
@@ -168,10 +169,12 @@ class RetrieverAgent:
                 docs = self.vector_store.similarity_search(query, k=k)
             
             logger.info(f"Retrieved {len(docs)} documents")
+            print(f"      [RAG] ✅ Found {len(docs)} relevant chunks in the index.")
             return docs
         
         except Exception as e:
             logger.error(f"Retrieval error: {e}")
+            print(f"      [RAG] ❌ Retrieval failed: {e}")
             return []
     
     def retrieve_with_scores(
