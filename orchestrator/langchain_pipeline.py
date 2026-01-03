@@ -9,17 +9,14 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-from typing import TypedDict, Annotated, Sequence, List, Dict, Any
+from typing import TypedDict, Sequence, List, Dict, Any
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.checkpoint.mongodb import MongoDBSaver
 from pymongo import MongoClient
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
 from langchain_openai import ChatOpenAI
-from pydantic import BaseModel, Field
 from langfuse.langchain import CallbackHandler
-import operator
-import logging
 from logger_config import setup_logger
 
 # Import your existing agents
@@ -435,7 +432,7 @@ def retrieval_node(state: AgentState) -> AgentState:
                 print(f"[AGENT] ✅ Web search complete. Found {len(web_results)} relevant results.\n")
             else:
                 logger.warning("⚠️ SEARCH: No results found")
-                print(f"[AGENT] ⚠️ No web search results found for the query.\n")
+                print("[AGENT] ⚠️ No web search results found for the query.\n")
         elif decision and decision.tool == "targeted_crawl":
             if decision.target_url:
                 logger.info(f"🕸️ EXECUTION: Targeted Crawl on {decision.target_url}")
@@ -455,7 +452,7 @@ def retrieval_node(state: AgentState) -> AgentState:
                 print(f"[AGENT] ✅ RAG retrieval complete. Retrieved {len(docs)} relevant document chunks.\n")
             else:
                 logger.warning("⚠️ RAG: No relevant documents found")
-                print(f"[AGENT] ⚠️ No relevant documents found in the knowledge base.\n")
+                print("[AGENT] ⚠️ No relevant documents found in the knowledge base.\n")
         elif decision and decision.tool == "calculator":
             logger.info(f"🔢 EXECUTION: Calculator for '{state['query']}'")
             print(f"\n[AGENT] 🔢 Evaluating math expression: '{state['query']}'...")

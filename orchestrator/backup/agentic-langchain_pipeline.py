@@ -3,7 +3,6 @@ LangChain Agentic Pipeline with LangGraph
 Implements a complete agentic workflow with streaming support
 """
 
-import os
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -12,12 +11,10 @@ load_dotenv()
 from typing import TypedDict, Annotated, Sequence, List, Dict, Any
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
-from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
+from langchain_core.messages import BaseMessage
 from langchain_openai import ChatOpenAI
-from pydantic import BaseModel, Field
 from langfuse.langchain import CallbackHandler
 import operator
-import logging
 from logger_config import setup_logger
 
 # Import your existing agents

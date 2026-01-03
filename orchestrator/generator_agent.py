@@ -1,7 +1,6 @@
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables import RunnablePassthrough
 from typing import Dict, List
-import logging
 from logger_config import setup_logger
 
 logger = setup_logger("generator")

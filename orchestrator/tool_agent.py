@@ -4,7 +4,7 @@ Supports: Web search, calculators, API calls, custom tools
 """
 
 from typing import List, Dict, Any, Optional, Callable
-from langchain_core.tools import Tool, BaseTool
+from langchain_core.tools import Tool
 
 # Suppress annoying UserWarnings from langchain-tavily
 import warnings
@@ -20,7 +20,6 @@ except ImportError:
     TAVILY_NEW_PACKAGE = False
 from langgraph.prebuilt import create_react_agent
 from langchain_core.messages import HumanMessage, AIMessage
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from pydantic import BaseModel, Field
 from logger_config import setup_logger
 import math
@@ -302,14 +301,14 @@ class ToolAgent:
             return []
         
         try:
-            print(f"      [TOOL] 🌍 Calling Tavily Search Engine...")
+            print("      [TOOL] 🌍 Calling Tavily Search Engine...")
             results = tavily_tool.func({"query": query})
             
             if isinstance(results, list):
                 print(f"      [TOOL] ✅ Found {len(results)} results from Tavily.")
                 return results[:max_results]
             else:
-                print(f"      [TOOL] ✅ Found 1 result from Tavily.")
+                print("      [TOOL] ✅ Found 1 result from Tavily.")
                 return [results]
         
         except Exception as e:

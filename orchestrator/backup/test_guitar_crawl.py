@@ -1,5 +1,4 @@
 import requests
-import json
 
 def test_guitar_gallery():
     url = "http://localhost:8000/api/query"

@@ -1,7 +1,6 @@
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from pydantic import BaseModel, Field
 from typing import List
-import logging
 from logger_config import setup_logger
 
 logger = setup_logger("intent")

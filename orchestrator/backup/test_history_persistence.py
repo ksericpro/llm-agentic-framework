@@ -8,7 +8,6 @@ This script tests that:
 
 import asyncio
 import httpx
-import json
 
 API_BASE_URL = "http://127.0.0.1:8000"
 
@@ -84,11 +83,11 @@ async def test_chat_history_persistence():
             # Verify we have at least 4 messages (2 Q&A pairs)
             if len(history) >= 4:
                 print("\n✅ SUCCESS: Chat history is properly preserved!")
-                print(f"   Expected: At least 4 messages (2 Q&A pairs)")
+                print("   Expected: At least 4 messages (2 Q&A pairs)")
                 print(f"   Got: {len(history)} messages")
             else:
                 print("\n❌ FAILURE: Chat history was not preserved!")
-                print(f"   Expected: At least 4 messages (2 Q&A pairs)")
+                print("   Expected: At least 4 messages (2 Q&A pairs)")
                 print(f"   Got: {len(history)} messages")
         else:
             print(f"   Error: {response.status_code}")

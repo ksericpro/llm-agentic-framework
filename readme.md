@@ -1,15 +1,16 @@
-# LangChain Agentic Pipeline with Streaming API
+# Knowledge Bot Agentic Pipeline
 
-A production-ready multi-agent LLM pipeline built with **LangChain**, **LangGraph**, and **FastAPI** that supports real-time streaming responses.
+A production-ready multi-agent LLM pipeline built with **LangChain**, **LangGraph**, and **FastAPI** that supports real-time streaming responses and async background processing with Redis.
 
 ## 🌟 Features
 
 - **Multi-Agent Architecture**: Router, Intent Planning, Retrieval, Translator, Generator, and Critic agents.
+- **Async Job Queue**: Robust background processing using **Redis Queue** and Workers, decoupling execution from API connections.
 - **Advanced Web Crawling**: Integration with **Crawl4AI** for JavaScript rendering and clean Markdown extraction.
 - **Multilingual Support**: Built-in **Translation Agent** for universal output in Chinese, Spanish, French, German, and Japanese.
 - **Hierarchical Memory**: Scalable conversation history using multi-level summarization for 100+ message sessions.
 - **Observability**: Full tracing and monitoring integrated with **Langfuse**.
-- **Real-time Streaming**: Progressive responses via Server-Sent Events (SSE).
+- **Real-time Streaming**: Progressive responses via Server-Sent Events (SSE) (supports both direct and queued modes).
 - **Persistent Feedback**: Built-in thumbs up/down system with MongoDB storage and analytics.
 - **Smart UI**: Modern Streamlit dashboard with sticky headers, session history (24h filter), and tool-usage badges.
 
@@ -46,6 +47,7 @@ Edit `.env` and add your API keys:
 OPENAI_API_KEY=sk-your-openai-key-here
 TAVILY_API_KEY=tvly-your-tavily-key-here
 MONGO_URL=your-mongo-url-here
+REDIS_URL=redis://localhost:6379/0  # Required for Queue/Worker
 LANGFUSE_PUBLIC_KEY=your-public-key
 LANGFUSE_SECRET_KEY=your-secret-key
 ```
@@ -56,184 +58,91 @@ LANGFUSE_SECRET_KEY=your-secret-key
 - MongoDB: https://www.mongodb.com
 - Langfuse: https://langfuse.com
 
-### 3. Run the API
+### 3. Running the System
 
+To run the full system with the reliable Redis Queue architecture, you need to run three components:
+
+**1. Redis Server**
+Ensure you have a Redis server running locally or accessible via `REDIS_URL`.
+
+**2. API Server (Terminal 1)**
+Handles HTTP requests and queues jobs.
 ```bash
-# Option 1: Direct Python
-uv run api.py
-
-# Option 2: Using uvicorn (recommended for production)
-uvicorn api:app --reload --port 8000
-
-# Option 3: Production mode
-uvicorn api:app --host 0.0.0.0 --port 8000 --workers 4
+cd orchestrator && uv run python -m uvicorn api:app --reload --port 8000
 ```
 
-The API will be available at: `http://localhost:8000`
-
-### 4. Test the API
-
+**3. Background Worker (Terminal 2)**
+Processes jobs from the queue and publishes updates.
 ```bash
-# Run the example client
-uv run example_client.py
-'''
+cd orchestrator && uv run python worker.py
+```
 
-# Test health endpoint
-curl http://localhost:8000/health
+**4. Frontend UI (Terminal 3)**
+User interface for interacting with the system.
+```bash
+cd ui/streamlit-ui && uv run python -m streamlit run app.py
+```
+
+
+### 5. Scaling Workers (Optional)
+
+To handle higher traffic, you can start multiple worker processes. They will automatically coordinate using the Redis Queue.
+
+**How it works:**
+- **Load Balancing**: Workers use a "First Come, First Served" model (competing consumer pattern) via Redis `BLPOP`.
+- **Concurrency**: If you have 10 workers, you can process 10 AI queries simultaneously.
+- **Auto-Distribution**: Idle workers instantly pick up new jobs. If a worker crashes, the others keep running.
+
+To scale, simply open more terminals and run the worker command again:
+```bash
+# Terminal 4, 5, 6...
+cd orchestrator && uv run python worker.py
+```
+
+*Note: In production (e.g., Docker/K8s), simply increase the replica count for the worker container.*
+
 
 ## 📡 API Endpoints
 
-### Health Check
+### Async Queue Query (Recommended)
 
+1. **Submit Job**:
 ```bash
-GET /health
+POST /api/queue
+{ "query": "..." }
 ```
-
-**Response:**
+Response:
 ```json
-{
-  "status": "healthy",
-  "openai_configured": true,
-  "tavily_configured": true,
-  "endpoints": {
-    "query": "/api/query",
-    "stream": "/api/stream"
-  }
-}
+{ "success": true, "request_id": "uuid...", "stream_url": "/api/stream/uuid..." }
 ```
 
-### Non-Streaming Query
-
+2. **Listen for Updates**:
 ```bash
-POST /api/query
+GET /api/stream/{request_id}
 ```
 
-**Request:**
-```json
-{
-  "query": "What are the latest developments in AI?",
-  "chat_history": [
-    {"role": "user", "content": "Previous question"},
-    {"role": "assistant", "content": "Previous answer"}
-  ],
-  "model": "gpt-4o-mini",
-  "temperature": 0.7
-}
-```
+### Legacy Endpoints
 
-**Response:**
-```json
-{
-  "success": true,
-  "query": "What are the latest developments in AI?",
-  "final_answer": "Based on recent web searches...",
-  "intent": "web_search",
-  "routing_decision": "web_search",
-  "citations": [0, 1, 2],
-  "error": null
-}
-```
-
-### Streaming Query
-
-```bash
-POST /api/stream
-```
-
-**Request:** Same as `/api/query`
-
-**Response:** Server-Sent Events (SSE) stream
-
-```
-data: {"event": "start", "query": "..."}
-
-data: {"node": "router", "state": {...}}
-
-data: {"node": "generator", "state": {"draft_answer": "..."}}
-
-data: {"event": "complete"}
-```
-
-### Unified Chat Endpoint
-
-```bash
-POST /api/chat
-```
-
-Automatically routes to streaming or non-streaming based on `stream` flag.
+- `POST /api/chat`: Dual-mode (stream/sync) endpoint.
+- `POST /api/query`: Synchronous (blocking) endpoint.
+- `POST /api/stream`: Direct SSE streaming endpoint.
 
 ## 💻 Usage Examples
 
-### Python Client
+### Python Client (Async Queue)
 
 ```python
-from example_client import AgenticPipelineClient
+import requests
+import sseclient
 
-client = AgenticPipelineClient("http://localhost:8000")
+# 1. Submit Job
+response = requests.post("http://localhost:8000/api/queue", json={"query": "Hello"})
+req_id = response.json()['request_id']
 
-# Non-streaming
-result = client.query("Explain quantum computing")
-print(result['final_answer'])
-
-# Streaming
-for event in client.stream_query("What is machine learning?"):
-    if event.get('event') == 'complete':
-        print("Done!")
-    elif event.get('state', {}).get('final_answer'):
-        print(event['state']['final_answer'])
-```
-
-### cURL
-
-**Non-streaming:**
-```bash
-curl -X POST http://localhost:8000/api/query \
-  -H "Content-Type: application/json" \
-  -d '{
-    "query": "What is the capital of France?",
-    "stream": false
-  }'
-```
-
-**Streaming:**
-```bash
-curl -X POST http://localhost:8000/api/stream \
-  -H "Content-Type: application/json" \
-  -H "Accept: text/event-stream" \
-  -d '{
-    "query": "Explain neural networks",
-    "stream": true
-  }'
-```
-
-### JavaScript/TypeScript
-
-```javascript
-// Non-streaming
-const response = await fetch('http://localhost:8000/api/query', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    query: 'What is deep learning?',
-    stream: false
-  })
-});
-const data = await response.json();
-console.log(data.final_answer);
-
-// Streaming with EventSource
-const eventSource = new EventSource(
-  'http://localhost:8000/api/stream?' + 
-  new URLSearchParams({
-    query: 'Explain transformers',
-    stream: true
-  })
-);
-
-eventSource.onmessage = (event) => {
-  const data = JSON.parse(event.data);
-  console.log(data);
-};
+# 2. Listen
+messages = sseclient.SSEClient(f"http://localhost:8000/api/stream/{req_id}")
+for msg in messages:
+    print(msg.data)
 ```
 
 ## 🔧 Configuration Options
@@ -263,6 +172,8 @@ llm-agentic/
 ├── docs/                       # Project documentation
 ├── orchestrator/               # Backend & Core Agents
 │   ├── api.py                  # FastAPI application
+│   ├── worker.py               # Background Worker Process
+│   ├── redis_client.py         # Redis utility (Queue/PubSub)
 │   ├── langchain_pipeline.py   # LangGraph pipeline implementation
 │   ├── router_agent.py         # Router agent
 │   ├── intentplanning_agent.py # Intent & planning agent
@@ -420,12 +331,3 @@ For issues or questions:
 ---
 
 **Built with ❤️ using LangChain, LangGraph, and FastAPI**
-
-# 5. Import PDF to RAG [Optional]
-
-For now it is using META FAISS database.
-place your pdf file inside pdf folder
-uv run import_pdf_folder.py
-
-# 6. Run UI
-cd ui/streamlit-ui && uv run streamlit run app.py

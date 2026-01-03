@@ -1,5 +1,4 @@
 from langchain_core.prompts import ChatPromptTemplate
-import logging
 from logger_config import setup_logger
 
 logger = setup_logger("translation")

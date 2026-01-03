@@ -97,7 +97,7 @@ class AgenticPipelineClient:
                 try:
                     data = json.loads(data_str)
                     yield data
-                except json.JSONDecodeError as e:
+                except json.JSONDecodeError:
                     print(f"Failed to parse event: {data_str}")
 
 
@@ -126,7 +126,7 @@ def example_non_streaming():
     
     result = client.query(query)
     
-    print(f"\n3. Results:")
+    print("\n3. Results:")
     print(f"   Success: {result['success']}")
     print(f"   Intent: {result.get('intent', 'N/A')}")
     print(f"   Routing: {result.get('routing_decision', 'N/A')}")
@@ -197,7 +197,7 @@ def example_with_chat_history():
     
     query = "Can you give me an example?"
     
-    print(f"\nPrevious conversation:")
+    print("\nPrevious conversation:")
     for msg in chat_history:
         print(f"  {msg['role']}: {msg['content'][:50]}...")
     
@@ -278,7 +278,7 @@ def example_rich_dad_streaming():
         event_type = event.get('event')
         
         if event_type == 'start':
-            print(f"🚀 Pipeline started")
+            print("🚀 Pipeline started")
         
         elif event_type == 'complete':
             print("\n✅ Pipeline complete!")
@@ -286,11 +286,11 @@ def example_rich_dad_streaming():
             # Summary of routing
             if routing_used:
                 print(f"\n{'='*80}")
-                print(f"ROUTING SUMMARY:")
+                print("ROUTING SUMMARY:")
                 print(f"{'='*80}")
                 if "internal_retrieval" in routing_used.lower():
                     print(f"✅ RAG WAS USED! Tool: {routing_used}")
-                    print(f"   This means the answer came from your PDF knowledge base!")
+                    print("   This means the answer came from your PDF knowledge base!")
                 else:
                     print(f"⚠️  RAG NOT USED. Tool: {routing_used}")
                     print(f"   The answer came from: {routing_used}")
@@ -313,11 +313,11 @@ def example_rich_dad_streaming():
                 
                 # Parse and highlight if RAG is used
                 if "internal_retrieval" in routing_str.lower():
-                    print(f"   ✅ RAG/Internal Retrieval ACTIVATED!")
+                    print("   ✅ RAG/Internal Retrieval ACTIVATED!")
                 elif "web_search" in routing_str.lower():
-                    print(f"   🌐 Web Search activated (not using RAG)")
+                    print("   🌐 Web Search activated (not using RAG)")
                 elif "calculator" in routing_str.lower():
-                    print(f"   🔢 Calculator activated (not using RAG)")
+                    print("   🔢 Calculator activated (not using RAG)")
             
             if state.get('intent'):
                 print(f"   🎯 Intent: {state['intent']}")
@@ -326,7 +326,7 @@ def example_rich_dad_streaming():
                 print(f"   📚 Retrieved: {len(state['retrieved_docs'])} documents from knowledge base")
             
             if state.get('final_answer'):
-                print(f"\n   📝 Final Answer:")
+                print("\n   📝 Final Answer:")
                 print(f"   {'-'*76}")
                 print(f"   {state['final_answer']}")
                 print(f"   {'-'*76}")
@@ -417,7 +417,7 @@ def example_guitar_gallery():
                 final_answer = state['final_answer']
                 
         elif event.get('event') == 'complete':
-            print(f"\n✅ FINISHED")
+            print("\n✅ FINISHED")
             if final_answer:
                 print(f"\n📝 FINAL ANSWER:\n{final_answer}")
             print(f"\nTool Used: {routing_used}")

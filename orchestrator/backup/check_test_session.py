@@ -2,7 +2,6 @@ import os
 from dotenv import load_dotenv
 from pymongo import MongoClient
 from langgraph.checkpoint.mongodb import MongoDBSaver
-from langchain_core.messages import HumanMessage, AIMessage
 
 load_dotenv()
 

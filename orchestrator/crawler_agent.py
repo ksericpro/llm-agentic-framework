@@ -1,7 +1,6 @@
 import asyncio
-import logging
 import sys
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from logger_config import setup_logger
 
 # Fallback imports
@@ -19,7 +18,6 @@ if sys.platform == 'win32':
 try:
     from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig
     # In 0.7.x, names might have slightly changed
-    from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
     CRAWL4AI_AVAILABLE = True
 except Exception as e:
     logger.warning(f"crawl4ai import failed: {e}. Falling back to basic requests/BeautifulSoup crawler.")
@@ -56,7 +54,7 @@ class CrawlerAgent:
             
             if result.success:
                 # return the best available markdown
-                return result.markdown_v2.raw_markdown if result.markdown_v2 else result.markdown
+                return result.markdown.raw_markdown if result.markdown else ""
             else:
                 raise Exception(f"Crawl4AI failed: {result.error_message}")
 
@@ -69,7 +67,7 @@ class CrawlerAgent:
         
         if CRAWL4AI_AVAILABLE:
             try:
-                print(f"   [CRAWLER] 🚀 Using Advanced Mode (Crawl4AI + JS Rendering)...")
+                print("   [CRAWLER] 🚀 Using Advanced Mode (Crawl4AI + JS Rendering)...")
                 # Create a new event loop
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
@@ -85,7 +83,7 @@ class CrawlerAgent:
                 print(f"   [CRAWLER] ⚠️ Advanced mode failed: {e}")
         
         # Fallback to Basic Scraper
-        print(f"   [CRAWLER] 🐢 Falling back to Basic Scraper (Static HTML)...")
+        print("   [CRAWLER] 🐢 Falling back to Basic Scraper (Static HTML)...")
         return self._scrape_basic(url, max_chars)
 
     def _scrape_basic(self, url: str, max_chars: int) -> str:

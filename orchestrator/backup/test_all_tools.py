@@ -4,7 +4,6 @@ Each question is designed to trigger a specific tool in the router agent
 """
 
 import requests
-import json
 from typing import Dict
 
 

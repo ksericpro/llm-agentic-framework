@@ -9,7 +9,6 @@ from langchain_core.vectorstores import VectorStore
 from langchain_core.embeddings import Embeddings
 from langchain_openai import OpenAIEmbeddings
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-import logging
 from logger_config import setup_logger
 
 logger = setup_logger("retriever")

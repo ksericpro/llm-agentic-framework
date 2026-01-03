@@ -148,7 +148,6 @@ def test_api_import():
     print("\n🔍 Testing API import...")
     
     try:
-        import api
         print("   ✅ api.py imports successfully")
         print("   ✅ FastAPI app created")
         

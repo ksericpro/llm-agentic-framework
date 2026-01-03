@@ -6,10 +6,7 @@ Alternative to FAISS with persistent storage and advanced features
 from langchain_community.vectorstores import Chroma
 from langchain_openai import OpenAIEmbeddings
 from langchain_core.documents import Document
-from langchain.text_splitter import RecursiveCharacterTextSplitter
 from typing import List, Dict, Any
-import chromadb
-from chromadb.config import Settings
 import logging
 
 logging.basicConfig(level=logging.INFO)

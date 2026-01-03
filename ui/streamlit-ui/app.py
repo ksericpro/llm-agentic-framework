@@ -5,7 +5,6 @@ import json
 import time
 import asyncio
 import httpx
-from typing import List, Dict, Any
 import logging
 from datetime import datetime, timedelta
 
@@ -71,7 +70,7 @@ async def fetch_session_detail(session_id: str):
 def main():
     # Page configuration
     st.set_page_config(
-        page_title="Agentic AI Dashboard",
+        page_title="Knowledge Bot Dashboard",
         page_icon="🧠",
         layout="wide",
         initial_sidebar_state="expanded"
@@ -145,7 +144,7 @@ def main():
 
     # Sidebar
     with st.sidebar:
-        st.title("🧠 Knowledge & History")
+        st.title("Knowledge Bot History")
         
         st.session_state.target_language = st.selectbox(
             "🌍 Output Language",
@@ -239,7 +238,7 @@ def main():
     # Main Chat Interface - Pinned Header
     with st.container():
         st.markdown('<div id="sticky-header"></div>', unsafe_allow_html=True)
-        st.title("🚀 Agentic Pipeline")
+        st.title("🚀 Knowledge Bot")
         
         # Horizontal Settings Bar
         s_col1, s_col2, s_col3, s_col4 = st.columns([1.5, 1.5, 4, 2])
@@ -455,11 +454,22 @@ def main():
                             "target_language": st.session_state.target_language
                         }
                         
-                        # Use httpx to stream the response from the API
+                        # 1. Enqueue job via Redis
+                        async with httpx.AsyncClient(timeout=10.0) as client:
+                            resp = await client.post(f"{API_BASE_URL}/api/queue", json=payload)
+                            if resp.status_code != 200:
+                                st.error(f"Failed to queue job: {resp.text}")
+                                return
+                            
+                            queue_data = resp.json()
+                            request_id = queue_data.get("request_id")
+                            stream_url = queue_data.get("stream_url")
+                        
+                        # 2. Subscribe to SSE stream for updates
                         async with httpx.AsyncClient(timeout=None) as client:
-                            async with client.stream("POST", f"{API_BASE_URL}/api/stream", json=payload) as response:
+                            async with client.stream("GET", f"{API_BASE_URL}{stream_url}") as response:
                                 if response.status_code != 200:
-                                    st.error(f"API Error: {response.status_code}")
+                                    st.error(f"Stream Error: {response.status_code}")
                                     return
 
                                 async for line in response.aiter_lines():

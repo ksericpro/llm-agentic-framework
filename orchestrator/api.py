@@ -17,14 +17,13 @@ warnings.filterwarnings("ignore", message='Field name "stream" in "TavilyResearc
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any
+from typing import Optional, List
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, AIMessage
 from contextlib import asynccontextmanager
 import json
-import logging
+import asyncio
 from logger_config import setup_logger
-from pymongo import MongoClient
 
 # Import the pipeline
 from langchain_pipeline import (
@@ -32,10 +31,10 @@ from langchain_pipeline import (
     stream_agent_response, 
     get_all_sessions, 
     get_session_state,
-    get_checkpointer,
     clear_all_sessions,
     clear_session_context
 )
+from redis_client import redis_client
 
 # Configure logging
 logger = setup_logger("api")
@@ -66,6 +65,12 @@ async def lifespan(app: FastAPI):
         logger.warning("⚠️ Langfuse keys not set (observability will be disabled)")
     else:
         logger.info("📊 Langfuse observability enabled")
+        
+    # Check Redis
+    if redis_client.client:
+        logger.info("✅ Redis connected")
+    else:
+        logger.warning("⚠️ Redis not connected (async queue will fail)")
     
     logger.info("✅ API ready to accept requests")
     
@@ -77,7 +82,7 @@ async def lifespan(app: FastAPI):
 
 # Initialize FastAPI app
 app = FastAPI(
-    title="LangChain Agentic Pipeline API",
+    title="Knowledge Bot API",
     description="Multi-agent LLM pipeline with streaming support",
     version="1.0.0",
     lifespan=lifespan
@@ -328,6 +333,100 @@ async def stream_query(request: QueryRequest):
             status_code=500,
             detail=f"Stream setup failed: {str(e)}"
         )
+
+
+@app.post("/api/queue")
+async def queue_query(request: QueryRequest):
+    """
+    Async query endpoint (Redis Queue)
+    
+    Enqueues the query to be processed by a background worker.
+    Returns a request_id immediately.
+    """
+    try:
+        if not redis_client.client:
+            raise HTTPException(status_code=503, detail="Redis service unavailable")
+            
+        job_data = {
+            "query": request.query,
+            "session_id": request.session_id,
+            "model": request.model,
+            "temperature": request.temperature,
+            "target_language": request.target_language
+        }
+        
+        request_id = redis_client.enqueue_job(job_data)
+        
+        return {
+            "success": True, 
+            "message": "Job enqueued", 
+            "request_id": request_id,
+            "stream_url": f"/api/stream/{request_id}"
+        }
+        
+    except Exception as e:
+        logger.error(f"Queue failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/stream/{request_id}")
+async def stream_job_results(request_id: str):
+    """
+    Subscribe to updates for a specific queued job via SSE.
+    """
+    try:
+        if not redis_client.client:
+            raise HTTPException(status_code=503, detail="Redis service unavailable")
+
+        async def event_generator():
+            pubsub = redis_client.get_pubsub()
+            channel = f"job_updates:{request_id}"
+            pubsub.subscribe(channel)
+            
+            try:
+                # Yield initial connection message
+                yield f"data: {json.dumps({'event': 'connected', 'request_id': request_id})}\n\n"
+                
+                # Listen for messages
+                # We need to run the blocking listener in a way that yields
+                while True:
+                    message = pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
+                    if message:
+                        data = message['data']
+                        yield f"data: {data}\n\n"
+                        
+                        # Check for completion to close stream
+                        try:
+                            parsed = json.loads(data)
+                            if parsed.get("event") in ["complete", "error"]:
+                                break
+                        except:
+                            pass
+                    else:
+                        # Prevent tight loop spinning
+                        await asyncio.sleep(0.1)
+                        
+            except Exception as e:
+                logger.error(f"SSE loop error: {e}")
+                yield f"data: {json.dumps({'event': 'error', 'error': str(e)})}\n\n"
+            finally:
+                pubsub.unsubscribe(channel)
+                pubsub.close()
+        
+        return StreamingResponse(
+            event_generator(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no"
+            }
+        )
+            
+    except Exception as e:
+        logger.error(f"Stream setup failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 
 @app.post("/api/chat")

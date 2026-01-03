@@ -6,4 +6,11 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "langfuse>=3.11.2",
+    "redis>=7.1.0",
+    "uvicorn>=0.40.0",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.14.10",
 ]
