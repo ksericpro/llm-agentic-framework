@@ -350,7 +350,7 @@ For issues or questions:
 
 ---
 
-**Built with ❤️ using LangChain, LangGraph, and FastAPI**
+**Built with ❤️ using LangChain, LangGraph, LangFuse, SSE, Redis, MongoDB, Redis Queue, UV, Ruff, and FastAPI**
 
 **Author:** Eric See  
 **Email:** ksericpro@gmail.com  
