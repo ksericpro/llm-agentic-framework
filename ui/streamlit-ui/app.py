@@ -71,7 +71,7 @@ def main():
     # Page configuration
     st.set_page_config(
         page_title="Knowledge Bot Dashboard",
-        page_icon="🧠",
+        page_icon="bot-icon.png",
         layout="wide",
         initial_sidebar_state="expanded"
     )
@@ -212,21 +212,52 @@ def main():
             with st.container(height=400):
                 for s in display_list:
                     sid = s['session_id']
-                    summary = s.get('summary') or "No summary available"
+                    summary = s.get('summary')
                     ts = format_timestamp(s.get('last_updated'))
                     
-                    label = f"📄 {sid}\n🕒 {ts}"
-                    if st.button(label, key=f"btn_{sid}", use_container_width=True, help=f"Summary: {summary}"):
-                        st.session_state.session_id = sid
-                        detail = asyncio.run(fetch_session_detail(sid))
-                        if detail and detail.get("success"):
-                            st.session_state.current_summary = detail.get("summary", "No summary yet.")
-                            loaded_messages = detail.get("history", [])
-                            for msg in loaded_messages:
-                                if "timestamp" not in msg:
-                                    msg["timestamp"] = "Previously"
-                            st.session_state.messages = loaded_messages
-                        st.rerun()
+                    # Create a cleaner display label
+                    if sid.startswith("chat_"):
+                        short_id = sid[5:] # Remove 'chat_' prefix
+                    else:
+                        short_id = sid[:8]
+                    
+                    # Use summary if available, otherwise fallback to ID
+                    display_name = summary if summary else f"Session {short_id}"
+                    
+                    # Layout: [Chat Button (wide)] [Delete Button (narrow)]
+                    c1, c2 = st.columns([0.8, 0.2])
+                    
+                    with c1:
+                        # Use a clean single-line label with date as help text or second line
+                        btn_label = f"📄 {display_name}"
+                        if st.button(btn_label, key=f"btn_{sid}", use_container_width=True, help=f"Last updated: {ts}\nFull ID: {sid}"):
+                            st.session_state.session_id = sid
+                            detail = asyncio.run(fetch_session_detail(sid))
+                            if detail and detail.get("success"):
+                                st.session_state.current_summary = detail.get("summary", "No summary yet.")
+                                loaded_messages = detail.get("history", [])
+                                for msg in loaded_messages:
+                                    if "timestamp" not in msg:
+                                        msg["timestamp"] = "Previously"
+                                st.session_state.messages = loaded_messages
+                            st.rerun()
+                    
+                    with c2:
+                        # Compact delete button
+                        if st.button("🗑️", key=f"del_{sid}", help="Delete this session", use_container_width=True):
+                             try:
+                                with httpx.Client(timeout=10.0) as client:
+                                    client.delete(f"{API_BASE_URL}/api/sessions/{sid}")
+                                    if sid == st.session_state.session_id:
+                                        st.session_state.messages = []
+                                        st.session_state.current_summary = "No summary yet."
+                                        st.session_state.session_id = generate_new_session_id()
+                                    st.rerun()
+                             except Exception as e:
+                                st.error(f"Err: {e}")
+                            
+                    # Add a tiny separator or spacing if needed (optional)
+                    st.markdown("<div style='margin-bottom: 2px;'></div>", unsafe_allow_html=True)
         else:
             st.info("No previous sessions found.")
 
@@ -238,7 +269,16 @@ def main():
     # Main Chat Interface - Pinned Header
     with st.container():
         st.markdown('<div id="sticky-header"></div>', unsafe_allow_html=True)
-        st.title("🚀 Knowledge Bot")
+        col_logo, col_title = st.columns([1, 10])
+        with col_logo:
+            st.image("bot-icon.png", width=60)
+        with col_title:
+            st.title("Knowledge Bot")
+            st.markdown("""
+            I am an advanced agentic bot enabled with:
+            - 📚 **RAG:** Expert on *Rich Dad Poor Dad*
+            - 🌐 **Web:** Capable of crawling and searching the internet
+            """)
         
         # Horizontal Settings Bar
         s_col1, s_col2, s_col3, s_col4 = st.columns([1.5, 1.5, 4, 2])
@@ -437,7 +477,7 @@ def main():
 
 
         # Agent Response via API Streaming
-        with st.chat_message("assistant"):
+        with st.chat_message("assistant", avatar="bot-icon.png"):
             response_placeholder = st.empty()
             full_response = ""
             

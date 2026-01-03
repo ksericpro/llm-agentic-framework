@@ -12,6 +12,7 @@ A production-ready multi-agent LLM pipeline built with **LangChain**, **LangGrap
 - **Observability**: Full tracing and monitoring integrated with **Langfuse**.
 - **Real-time Streaming**: Progressive responses via Server-Sent Events (SSE) (supports both direct and queued modes).
 - **Persistent Feedback**: Built-in thumbs up/down system with MongoDB storage and analytics.
+- **Unified UI/UX**: Custom branding (Avatars, Titles) and consistent feature set (History, Deletion, Streaming) across both Next.js and Streamlit apps.
 - **Smart UI**: Modern Streamlit dashboard with sticky headers, session history (24h filter), and tool-usage badges.
 
 ## 📋 Architecture
@@ -78,9 +79,20 @@ cd orchestrator && uv run python worker.py
 ```
 
 **4. Frontend UI (Terminal 3)**
-User interface for interacting with the system.
+Choose *one* of the available frontends:
+
+**Option A: Streamlit (Python)**
+Great for quick visualizations and data science.
 ```bash
 cd ui/streamlit-ui && uv run python -m streamlit run app.py
+```
+
+**Option B: Next.js (React/TypeScript)**
+Modern, responsive web application.
+```bash
+cd ui/nextjs-app
+npm install  # First time only
+npm run dev
 ```
 
 
@@ -188,7 +200,13 @@ llm-agentic/
 │   └── .env.example            # Environment variables template
 ├── postman/                    # API Testing Collections
 ├── ui/                         # Frontend Applications
-│   └── streamlit-ui/           # Streamlit dashboard
+│   ├── streamlit-ui/           # Streamlit dashboard
+│   │   ├── app.py              # Main dashboard script
+│   │   └── bot-icon.png        # Custom AI avatar
+│   └── nextjs-app/             # Modern React/Next.js App
+│       ├── public/             
+│       │   └── bot-icon.png    # Custom AI avatar
+│       └── src/                # Next.js source code
 ├── main_pipeline.png           # Architecture diagram source
 └── README.md                   # This file
 ```
