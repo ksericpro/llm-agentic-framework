@@ -83,12 +83,14 @@ Choose *one* of the available frontends:
 
 **Option A: Streamlit (Python)**
 Great for quick visualizations and data science.
+![Streamlit UI](streamlit_ui.png)
 ```bash
 cd ui/streamlit-ui && uv run python -m streamlit run app.py
 ```
 
 **Option B: Next.js (React/TypeScript)**
 Modern, responsive web application.
+![Next.js UI](nextjs_ui.png)
 ```bash
 cd ui/nextjs-app
 npm install  # First time only
@@ -328,7 +330,7 @@ All errors return structured JSON responses:
 
 ## 📝 License
 
-This project is provided as-is for educational and commercial use.
+This project is licensed under the Apache License, Version 2.0. See the [LICENSE](LICENSE) file for details.
 
 ## 🤝 Contributing
 
@@ -349,3 +351,7 @@ For issues or questions:
 ---
 
 **Built with ❤️ using LangChain, LangGraph, and FastAPI**
+
+**Author:** Eric See  
+**Email:** ksericpro@gmail.com  
+**Last Updated:** 2026-01-03
