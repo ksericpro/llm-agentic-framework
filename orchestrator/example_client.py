@@ -383,6 +383,41 @@ def example_all_tools_demo():
             print(f"❌ Failed: {e}")
 
 
+def example_dspy_demo():
+    """Example: Demonstrate DSPy activation of each specific tool"""
+    print("\n" + "=" * 80)
+    print("TOOL ACTIVATION DEMONSTRATION")
+    print("=" * 80)
+    print("This demo sends questions specifically designed to trigger each tool.")
+    
+    client = AgenticPipelineClient()
+    
+    # Define tool-specific test cases
+    test_cases = [
+        {
+            "tool": "WEB SEARCH (Google Search)",
+            "query": "What is the price of Bitcoin?",
+            "note": "Triggered by current events/lack of specific URL."
+        },
+        {
+            "tool": "INTERNAL RETRIEVAL",
+            "query": "Summarize Rich Dad Poor Dad",
+            "note": "Triggered by terms like 'internal' or 'documents'."
+        }
+    ]
+    
+    for test in test_cases:
+        print(f"\n🚀 Testing tool: {test['tool']}")
+        print(f"📝 Query: \"{test['query']}\"")
+        print(f"💡 Expected because: {test['note']}")
+        
+        try:
+            result = client.query(test['query'], temperature=0.1)
+            print(f"🎯 Route Chosen: {result.get('routing_decision', 'N/A')}")
+            print(f"✅ Preview: {result['final_answer'][:150]}...")
+        except Exception as e:
+            print(f"❌ Failed: {e}")
+
 def example_guitar_gallery():
     """Example: Specific web crawl test for Guitar Gallery"""
     print("\n" + "=" * 80)
@@ -451,7 +486,8 @@ if __name__ == "__main__":
         # example_all_tools_demo()
         
         # Individual targeted crawl test
-        example_guitar_gallery()
+        #example_guitar_gallery()
+        example_dspy_demo()
         
         print("\n" + "=" * 80)
         print("ALL EXAMPLES COMPLETED!")

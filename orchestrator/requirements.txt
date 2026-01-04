@@ -3,11 +3,13 @@ aiohappyeyeballs==2.6.1
 aiohttp==3.13.2
 aiosignal==1.4.0
 aiosqlite==0.22.1
+alembic==1.17.2
 alphashape==1.3.1
 altair==6.0.0
 annotated-doc==0.0.4
 annotated-types==0.7.0
 anyio==4.12.0
+asyncer==0.0.8
 attrs==25.4.0
 backoff==2.2.1
 beautifulsoup4==4.14.3
@@ -21,13 +23,18 @@ chardet==5.2.0
 charset-normalizer==3.4.4
 click==8.3.1
 click-log==0.4.0
+cloudpickle==3.1.2
 colorama==0.4.6
+colorlog==6.10.1
 crawl4ai==0.7.8
 cryptography==46.0.3
 cssselect==1.3.0
 dataclasses-json==0.6.7
+diskcache==5.6.3
 distro==1.9.0
 dnspython==2.8.0
+dspy==3.0.4
+dspy-ai==3.0.4
 emoji==2.15.0
 faiss-cpu==1.13.2
 fake-http-header==0.3.5
@@ -38,6 +45,7 @@ filelock==3.20.1
 filetype==1.2.0
 frozenlist==1.8.0
 fsspec==2025.12.0
+gepa==0.0.17
 gitdb==4.0.12
 gitpython==3.1.46
 googleapis-common-protos==1.72.0
@@ -61,6 +69,7 @@ iniconfig==2.3.0
 jinja2==3.1.6
 jiter==0.12.0
 joblib==1.5.3
+json-repair==0.55.0
 jsonpatch==1.33
 jsonpointer==3.0.0
 jsonschema==4.25.1
@@ -84,6 +93,8 @@ langsmith==0.5.2
 lark==1.3.1
 litellm==1.80.11
 lxml==5.4.0
+magicattr==0.1.6
+mako==1.3.10
 markdown-it-py==4.0.0
 markupsafe==3.0.3
 marshmallow==3.26.2
@@ -102,6 +113,7 @@ opentelemetry-exporter-otlp-proto-http==1.39.1
 opentelemetry-proto==1.39.1
 opentelemetry-sdk==1.39.1
 opentelemetry-semantic-conventions==0.60b1
+optuna==4.6.0
 orjson==3.11.5
 ormsgpack==1.12.1
 packaging==25.0

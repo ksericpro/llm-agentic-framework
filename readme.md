@@ -2,6 +2,20 @@
 
 A production-ready multi-agent LLM pipeline built with **LangChain**, **LangGraph**, and **FastAPI** that supports real-time streaming responses and async background processing with Redis.
 
+## Applied AI or AI engineering:
+
+- Using AI models (LLMs) as components
+- Building systems around them (agents, memory, tools)
+- Operating them reliably (queues, monitoring, MLOps)
+- Improving them systematically (DSPy, evaluation)
+
+## 🌟 New Features (v2 Alpha)
+
+- **DSPy Integration (Phase 1)**: The **Router Agent** is now powered by **DSPy**, an advanced framework for optimizing LM prompts.
+  - **Self-Improving**: The system can "compile" itself to learn better routing logic from examples.
+  - **Hybrid Architecture**: Combines the determinism of LangChain with the optimization power of DSPy.
+
+
 ## 🌟 Features
 
 - **Multi-Agent Architecture**: Router, Intent Planning, Retrieval, Translator, Generator, and Critic agents.
@@ -215,10 +229,12 @@ llm-agentic/
 
 ## 🔍 Agent Details
 
-### 1. Router Agent
+### 1. Router Agent (DSPy Optimized)
 - **Purpose**: Determines the best tool/approach for the query
+- **Technology**: Built with **DSPy** for self-optimizing classification.
 - **Decisions**: `web_search`, `targeted_crawl`, `internal_retrieval`, `calculator`, `translate`
 - **Output**: Routing decision with reasoning and target metadata
+- **Auto-Compilation**: Automatically compiles improved prompts on the first run.
 
 ### 2. Intent & Planning Agent
 - **Purpose**: Analyzes user intent and creates execution plan
@@ -350,8 +366,10 @@ For issues or questions:
 
 ---
 
+
+
 **Built with ❤️ using LangChain, LangGraph, LangFuse, SSE, Redis, MongoDB, Redis Queue, UV, Ruff, and FastAPI**
 
 **Author:** Eric See  
 **Email:** ksericpro@gmail.com  
-**Last Updated:** 2026-01-03
+**Last Updated:** 2026-01-04 (Phase 1: DSPy Router Integrated)

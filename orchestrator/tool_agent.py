@@ -213,7 +213,12 @@ class ToolAgent:
             return f"Error: Tool '{tool_name}' not found. Available tools: {available}"
         
         try:
-            result = tool.func(tool_input)
+            if hasattr(tool, "invoke"):
+                result = tool.invoke(tool_input)
+            elif hasattr(tool, "func"):
+                result = tool.func(tool_input)
+            else:
+                 result = tool.run(tool_input)
             logger.info(f"Tool execution successful: {len(str(result))} chars returned")
             return result
         
@@ -302,7 +307,10 @@ class ToolAgent:
         
         try:
             print("      [TOOL] 🌍 Calling Tavily Search Engine...")
-            results = tavily_tool.func({"query": query})
+            if hasattr(tavily_tool, "invoke"):
+                results = tavily_tool.invoke({"query": query})
+            else:
+                results = tavily_tool.func({"query": query})
             
             if isinstance(results, list):
                 print(f"      [TOOL] ✅ Found {len(results)} results from Tavily.")

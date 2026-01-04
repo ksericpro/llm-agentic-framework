@@ -20,7 +20,8 @@ from langfuse.langchain import CallbackHandler
 from logger_config import setup_logger
 
 # Import your existing agents
-from router_agent import RouterAgent, RoutingDecision
+from router_agent import RoutingDecision
+from router_agent_dspy import RouterAgent
 from generator_agent import GeneratorAgent
 from intentplanning_agent import IntentPlanningAgent, PlanSchema
 from critic_agent import CriticAgent
