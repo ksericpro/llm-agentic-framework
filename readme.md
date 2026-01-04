@@ -203,10 +203,14 @@ llm-agentic/
 │   ├── worker.py               # Background Worker Process
 │   ├── redis_client.py         # Redis utility (Queue/PubSub)
 │   ├── langchain_pipeline.py   # LangGraph pipeline implementation
-│   ├── router_agent.py         # Router agent
+│   ├── router_agent.py         # Router agent (Legacy)
+│   ├── router_dspy.py          # DSPy Router Implementation
+│   ├── router_agent_dspy.py    # DSPy Router Adapter
 │   ├── intentplanning_agent.py # Intent & planning agent
 │   ├── translation_agent.py    # Translation agent
 │   ├── generator_agent.py      # Answer generator agent
+│   ├── generator_dspy.py       # DSPy Generator Implementation (Experimental)
+│   ├── generator_agent_dspy.py # DSPy Generator Adapter (Experimental)
 │   ├── critic_agent.py         # Quality assurance agent
 │   ├── retriever_agent.py      # Vector store retrieval agent
 │   ├── tool_agent.py           # Tool execution agent
@@ -368,7 +372,7 @@ For issues or questions:
 
 
 
-**Built with ❤️ using LangChain, LangGraph, LangFuse, SSE, Redis, MongoDB, Redis Queue, UV, Ruff, and FastAPI**
+**Built with ❤️ using LangChain, LangGraph, LangFuse, DSPy, SSE, Redis, MongoDB, Redis Queue, UV, Ruff, and FastAPI**
 
 **Author:** Eric See  
 **Email:** ksericpro@gmail.com  
